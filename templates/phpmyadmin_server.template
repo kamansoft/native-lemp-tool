@@ -1,0 +1,47 @@
+#! /bin/bash
+
+if [[ -z $1 ||  -z $2 ]];then 
+        echo "Template needs the server public path as first parameter and the domain name or double couted domain names as secound"
+        echo "$0 [/path/to/public/folder] [server.domain-name ] "
+        exit 1
+fi
+PUBLIC_PATH=$1
+DOMAIN_NAME=$2
+
+cat << EOF
+server {
+        root $PUBLIC_PATH;
+        index index.php index.html index.htm index.nginx-debian.html;
+        server_name  $DOMAIN_NAME;
+        client_max_body_size 100M;
+
+
+        location /index {
+                return 301 /\$1;
+        }
+
+        location / {
+                try_files \$uri \$uri.html \$uri/ @extensionless-php;
+                #try_files \$uri \$uri/ =404;
+        }
+
+        location ~ \.php\$ {
+                include snippets/fastcgi-php.conf;
+                fastcgi_pass unix:/var/run/php/{{fpm_name}}-fpm.sock;
+        }
+
+        location @extensionless-php {
+                rewrite ^(.*)\$ \$1.php last;
+        }
+
+        location ~ /\.ht {
+                deny all;
+        }
+
+        location ~* \.(?:ico|css|js|gif|jpe?g|png)\$ {
+            expires 30d;
+            add_header Pragma public;
+            add_header Cache-Control "public";
+        }
+}
+EOF

@@ -1,0 +1,58 @@
+#! /bin/bash 
+
+if [[ -z $1 && -z $2 ]] ;then
+	echo "This script check if the first pased argument string match with any of the rest passed string value arguments"
+	echo "In order to work this script needs at least to parameters the needle and one or more values separated by space"
+	echo ""
+	echo "Usage example:"
+	echo "$0 [needle] [value-1] ... [value-n] "
+	exit;
+fi
+
+function validate() {
+FIRST_AVOIDED=false
+
+for valid_value in "$@";
+do
+	if [[ $FIRST_AVOIDED == false ]]; then
+		FIRST_AVOIDED=true
+	else
+    if [[ $detected_value == $valid_value ]]; then
+      VALUE_SELECTED_FROM_ARGS=$detected_value;
+      echo ""
+      echo "$VALUE_SELECTED_FROM_ARGS has been selected."
+      return 0
+      break
+
+    fi
+  fi
+done
+
+
+      echo ""
+      echo "The given value \"$detected_value\" is not among the valid elements."
+      echo "Valid option elements are:"
+      echo ""
+      FIRST_AVOIDED=false
+      for name in "$@"; do
+        if [[ $FIRST_AVOIDED == false ]]; then
+          FIRST_AVOIDED=true
+        else
+          echo " $name";
+        fi
+      done
+      echo ""
+      #echo "You can hint crtl + c keys to cancel execution."
+      read -p "Please type one of the elements from the above list to select it: " detected_value
+      validate $@
+
+}
+
+
+detected_value=$1
+validate $@
+export VALUE_SELECTED_FROM_ARGS
+
+
+
+

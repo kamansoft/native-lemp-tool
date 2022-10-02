@@ -1,0 +1,406 @@
+#! /bin/bash 
+
+
+INSTALL=false
+
+show_help(){
+	echo ""
+	echo "                                                                                   -"
+	echo "npstool [--option1 ...] [--option-with=value ...]"
+	echo ""
+	echo "all params with (*) are mandatory"
+	echo "Options:"
+	echo " -i,   --install             Proceed to setup repo and install:"
+	echo "                             nginx + php + mariadb + extra-laravel-development" 
+	echo "                             deb packages. "
+	echo ""
+	echo " -apt=                       A tool to install some deb packages using apt."
+	echo "                             example:  "
+	echo ""
+	echo "       --setup-repo          Proceed to install sury nginx and php repo with"
+	echo "                             the Official Mariadb repositories (ubuntu or debian)."
+	echo ""
+	echo "       --nginx-install       Install Nginx server."
+	echo ""
+	echo " -mdb  --mariadb-install     Install Mariadb version 10.6."
+	echo ""
+	echo " -p=,  --php-install=        Install a php version on system with dependencies"
+	echo "                             for laravel development, when used the php version"
+	echo "                             must be passed as option value."
+	echo ""
+	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
+	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
+	echo "                             the domanin name as value for this option"
+	echo ""
+	echo " -ld=, --local-domain-del=   Remove a domain name entry on your hosts file."
+	echo "                             You must pass the domain name as value for this option"
+	echo ""
+	echo " -fpm=, --fpm-add=           Add a new fpm file to be used."
+	echo "                             You must pass the domain name as value for this option"
+	echo ""
+
+	return 0
+}
+
+#settign the param vars
+for i in "$@"
+do
+case $i in
+    -help|--help)
+    show_help
+    return 0
+    shift # past argument=value
+    ;;
+    -i*|--install*)
+
+    INSTALL=true
+    shift # past arg
+    ;;
+    --setup-repo*)
+
+    SETUP_REPO=true
+    shift # past arg
+    ;;
+    --nginx-install*)
+
+    NGIX_INSTALL=true
+    shift # past arg
+    ;;
+    -mdb*|--mariadb-install*)
+
+    MARIADB_INSTALL=true
+    shift # past arg
+    ;;
+    -php=*|--php-version=*)
+    PHP_VERSION="${i#*=}"
+    shift # past arg
+    ;;
+    -p=*|--php-install=*)
+    PHP_VERSION_TO_INSTALL="${i#*=}"
+    shift # past arg
+    ;;
+    -la=*|--local-domain-add=*)
+    DOMAIN_ADD="${i#*=}"
+    shift # past arg
+    ;;
+    -ld=*|--local-domain-del=*)
+    DOMAIN_DEL="${i#*=}"
+    shift # past arg
+    ;;
+    -fpm=*|--fpm-add=*)
+    FPM_CREATE_USER="${i#*=}"
+    shift # past arg
+    ;;
+    *)
+          # unknown option
+    ;;
+esac
+done
+
+
+export PHP_VERSION
+export LINUX_USER
+
+#echo $INSTALL
+#echo $SETUP_REPO
+#echo $NGIX_INSTALL
+#echo $MARIADB_INSTALL
+#echo $PHP_VERSION_TO_INSTALL
+#echo $PHP_VERSION
+#echo $DOMAIN_ADD
+#echo $DOMAIN_DEL
+#echo $FPM_CREATE_USER
+
+#NPEST
+
+
+
+
+confirmation_message(){
+read -p "Are you sure to contnue ? [Y/n] " -n 1 -r
+if [[ ! $REPLY =~ ^[Yy]$ ]]
+then
+		echo "Script execution has ben cancel"
+		echo "Exiting..."
+    exit 1
+fi
+return 0
+}
+
+
+validate_sudo(){
+	if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit 1
+	fi
+}
+
+is_repo_installed(){
+	if ! grep -q "^deb .*$1" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
+    return 1
+  else
+  	return 0
+	fi
+
+}
+
+apt_packages_installer(){
+
+#	FIRST_AVOIDED=false
+  for name in "$@"; do
+#    if [[ $FIRST_AVOIDED == false ]]; then
+#      FIRST_AVOIDED=true
+#    else
+    echo " $name";
+#    fi
+  done
+}
+
+
+detect_os(){
+
+
+	DETECTED_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
+	DETECTED_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
+
+	echo "OS Detected Name: $DETECTED_DISTRO_NAME"
+	echo "OS Detected Version: $DETECTED_DISTRO_VERSION"
+	echo ""
+	export DETECTED_DISTRO_NAME
+	export DETECTED_DISTRO_VERSION
+
+}
+
+
+
+validate_user(){
+  LINUX_USER=""
+  valid_users=( $(cat /etc/passwd | cut -d: -f1) )
+
+  echo "Validating linux user: $1"
+  echo ""
+  export VALUE_SELECTED_FROM_ARGS
+  if [[ -n $1 ]];then
+   . ./scripts/bash_helpers/in_arguments $1 "${valid_users[@]}"
+  else
+   . ./scripts/bash_helpers/in_arguments "unspecified" "${validvalid_users[@]}"
+  fi
+  export LINUX_USER=$VALUE_SELECTED_FROM_ARGS
+
+}
+
+restart_php(){
+  echo "Restarting php fpm..."
+	sudo systemctl restart php$1-fpm
+}
+
+
+install_extra_packages_for_laravel_dev(){
+
+	validate_sudo
+	echo "This script will install the next deb packages commonly used on php laverl development"
+
+	confirmation_message
+	extra_packages=("git-all" "sqlite3" "nodejs" "npm")
+	echo "This script will install git-all "
+	sudo apt install "${extra_packages[@]}" 
+}
+
+install_php(){
+	
+
+	validate_sudo
+
+	PHP_VERSION=""
+  valid_php_versions=("8.0" "7.4" "7.3")
+  echo "Checking if php version $PHP_VERSION_TO_INSTALL is a valid version for this script to install."
+  export VALUE_SELECTED_FROM_ARGS
+  if [[ -n $PHP_VERSION_TO_INSTALL ]];then
+   . ./scripts/bash_helpers/in_arguments $PHP_VERSION_TO_INSTALL "${valid_php_versions[@]}"
+  else
+   . ./scripts/bash_helpers/in_arguments "x.x" "${valid_php_versions[@]}"
+  fi
+  export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
+  detect_os
+  echo "If not setted, this script will install the deb.sury.org php repo."
+  echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+
+	. scripts/bash_helpers/./detect_valid_linux_distro_name Ubuntu Debian
+  
+  if [[ $DETECTED_VALID_DISTRO_NAME == Ubuntu  ]]; then
+  	
+
+  	PPA_UBUNTU_REPO="ondrej/php" 
+  	is_repo_installed $PPA_UBUNTU_REPO
+  	if [[ "$?" -eq 1 ]]; then
+  		echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
+  		echo "Adding $PPA_UBUNTU_REPO ppa repository"
+  		sudo add-apt-repository ppa:ondrej/php
+  	else 
+  		echo "The $PPA_UBUNTU_REPO repository is already installed."
+
+  	fi
+
+
+
+  fi 
+
+  if [[ $DETECTED_VALID_DISTRO_NAME == Debian  ]]; then
+  	echo "Install for debian"
+  fi
+
+  echo "Installing php fpm and libraries"     
+	sudo apt install  php$PHP_VERSION_TO_INSTALL-{fpm,sqlite3,mysql,xml,xmlrpc,curl,gd,imagick,cli,dev,imap,mbstring,opcache,soap,zip,intl,bcmath,bz2,xdebug,ctype,gmp,bcmath,dev} php$PHP_VERSION 
+
+}
+
+
+
+install_nginx(){
+	sudo apt install nginx
+}
+
+install_mariadb(){
+
+	validate_sudo
+
+	detect_os
+
+	echo "If Official repositories for Mariadb 10.6 are not set, this script will add it, after it will install Mariadb 10.6 in this machine"
+	confirmation_message
+	. scripts/bash_helpers/./detect_valid_linux_distro_name Ubuntu Debian
+	echo "Installing repository dependencies..."
+	sudo apt-get install apt-transport-https curl
+	BASE_MARIADB_REPO_URL="https://mirror.rackspace.com/mariadb/repo/10.6/${DETECTED_VALID_DISTRO_NAME,,}"	
+	
+	is_repo_installed "$BASE_MARIADB_REPO_URL"
+
+	if [[ "$?" -eq 1 ]]; then
+		echo "Official MariaDB repositeries where not found..."
+		MARIA_DB_REPO=""
+		if [[ $DETECTED_VALID_DISTRO_NAME == Ubuntu  ]]; then
+			#echo "FOR UBUNTU"
+			. scripts/bash_helpers/./detect_valid_linux_distro_version bionic focal jammy
+			MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $DETECTED_VALID_DISTRO_VERSION main"
+			#echo "$MARIA_DB_REPO"
+		fi
+		if [[ $DETECTED_VALID_DISTRO_NAME == Debian  ]]; then
+			#echo "FOR DEBIAN"
+			. scripts/bash_helpers/./detect_valid_linux_distro_version stretch buster bullseye
+			MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $DETECTED_VALID_DISTRO_VERSION main"
+			#echo "$MARIA_DB_REPO"
+		fi
+		echo "Adding repository gpg key..."
+		sudo curl -o /etc/apt/trusted.gpg.d/mariadb_release_signing_key.asc 'https://mariadb.org/mariadb_release_signing_key.asc'	
+		echo "Adding the repository to sources list: $MARIA_DB_REPO "
+		sudo sh -c "echo '$MARIA_DB_REPO' >>/etc/apt/sources.list"
+
+	fi
+	sudo apt update
+  sudo apt install -y mariadb-server-10.6 sqlite3
+}
+
+
+add_domain_to_local(){
+	. ./scripts/hosts_file_manager add 127.0.0.1 $1
+}
+
+remove_domain_to_local(){
+	. ./scripts/hosts_file_manager remove 127.0.0.1 $1
+}
+
+
+
+create_fpm_for_user(){
+  LINUX_USER=$1
+  PHP_VERSION=$2
+  validate_user $LINUX_USER
+  VALUE_SELECTED_FROM_ARGS="undefined"
+  validate_php_version $PHP_VERSION
+
+
+  FILE_PATH=/etc/php/$PHP_VERSION/fpm/$LINUX_USER.conf
+  echo "$FILE_PATH"
+	if [[ "$1" == *"phpmyadmin"* ]]; then
+  	echo "It seams you are triying to set a new fpm for a phpmyadmin instance, a new fpm will be created from a phpmyadmin config template"
+  	sudo ./templates/fpm_phpmyadmin.template $LINUX_USER >> $FILE_PATH
+	else
+    sudo ./templates/fpm_general.template $LINUX_USER >> FILE_PATH
+	fi
+	echo "Fpm file has been create: "
+	echo "$FILE_PATH"
+	echo " "
+  restart_php $PHP_VERSION
+}
+
+remove_fpm_for_user(){
+FILE_PATH=/etc/php/$2/fpm/$1.conf
+	if [[ -f  $FILE_PATH ]]; then
+    echo "Removing Fpm file"
+    sudo rm "$FILE_PATH";
+	else
+    echo "$FILE_PATH does not exists"
+	fi
+
+
+}
+
+if [[ $INSTALL == true ]] ; then
+	echo "You've choose install"
+	repo_setup
+	install_nginx
+	install_mariadb
+	install_php
+else
+
+	if [[  $SETUP_REPO != true && 
+		   $SETUP_REPO  != true && 
+		   $NGIX_INSTALL  != true && 
+		   $MARIADB_INSTALL  != true && 
+		   -z $PHP_VERSION_TO_INSTALL &&
+		   -z $DOMAIN_ADD &&
+		   -z $DOMAIN_DEL &&
+		   -z $FPM_CREATE_USER
+
+	]]; then 
+		show_help
+	else
+		if [[ -n $PHP_VERSION ]]; then
+			validate_php_version $PHP_VERSION
+		fi
+		if [[ $SETUP_REPO == true ]]; then 
+			repo_setup
+		fi
+
+		if [[ $NGIX_INSTALL == true ]]; then 
+			install_nginx
+		fi
+
+		if [[ $MARIADB_INSTALL == true ]]; then 
+			install_mariadb
+		fi
+
+		if [[ -n $PHP_VERSION_TO_INSTALL ]]; then
+			install_php
+		fi
+		
+		if [[ -n $DOMAIN_ADD ]]; then 
+			add_domain_to_local $DOMAIN_ADD
+		fi
+		if [[ -n $DOMAIN_DEL ]]; then 
+			remove_domain_to_local $DOMAIN_DEL
+		fi
+
+		if [[ -n $FPM_CREATE_USER ]]; then
+
+		  create_fpm_for_user $FPM_CREATE_USER $PHP_VERSION
+		fi
+	fi
+
+fi
+
+
+
+
+
+
