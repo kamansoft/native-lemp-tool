@@ -31,6 +31,10 @@ show_help(){
 	echo "                             omposer, when used the php version must be passed"
 	echo "                             as param value."
 	echo ""
+	echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
+	echo "                             It does so using fpm, so it create a php-fpm with"
+	echo "                             a os user, also an nginx server "
+	echo ""	
 #	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
 #	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
 #	echo "                             the domanin name as value for this option"
@@ -45,22 +49,6 @@ show_help(){
 
 	return 0
 }
-
-
-
-
-
-
-validate_sudo(){
-	if (( $EUID != 0 )); then
-    echo "Please run as root"
-    exit 1
-	fi
-}
-
-
-
-
 
 
 
@@ -82,8 +70,9 @@ validate_user(){
 }
 
 restart_php(){
+	validate_php_version $1
   echo "Restarting php fpm..."
-	sudo systemctl restart php$1-fpm
+	sudo systemctl restart php$PHP_VERSION-fpm
 }
 
 
@@ -117,6 +106,7 @@ install_php(){
   
   echo "If not setted, this script will install the deb.sury.org php repo."
   echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+  install_deb_repo_packages
 	validate_distro_name "Ubuntu" "Debian"
   
   if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
@@ -155,7 +145,10 @@ install_php(){
 		confirmation_message
 		wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
 		sudo mv composer.phar /usr/local/bin/composer
+		install_extra_packages_for_laravel_dev
 	fi
+
+
 
 }
 
@@ -289,7 +282,45 @@ install_mariadb(){
 }
 
 
+install_phpmyadmin(){
+	validate_sudo
 
+	if [ ! $(which mysql) ]; then
+	    echo 'Please install Mariadb.'
+	    echo "You can install it running:"
+	    echo "$./npstool -mdb"
+	    exit 1
+	fi
+
+	if [ ! $(which php) ]; then
+	    echo 'Please install php.'
+	    echo "You can instal it running:"
+	    echo "$./npstool -p=8.0"
+	    exit 1
+  fi
+
+  if [ ! $(which nginx) ]; then
+	    echo 'Please install nginx.'
+	    echo "You can instal it running:"
+	    echo "$./npstool -ng"
+	    exit 1
+  fi
+
+  packages_installer unzip zip
+  echo ""
+  echo "phpmyadmin user is needed"
+  sudo adduser -q phpmyadmin
+  
+  sudo su phpmyadmin
+  exit 
+
+
+
+
+
+
+
+}
 
 
 
@@ -308,7 +339,7 @@ case $i in
     install_mariadb
     install_nginx
     install_php
-    install_extra_packages_for_laravel_dev
+    
     echo "Full batch instalation end "
     exit
     shift # past arg
@@ -333,6 +364,11 @@ case $i in
     ;;
     -p=*|--php-install=*)
 	    install_php ${i#*=}
+	    exit $?
+	    shift # past arg
+    ;;
+    --phpmyadmin-install*)
+	    install_phpmyadmin 
 	    exit $?
 	    shift # past arg
     ;;
