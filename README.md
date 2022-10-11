@@ -13,8 +13,8 @@ This script is compatible only for debian and ubuntu is uses [sury php repos](ht
 
 Just clone the project and go to the project folder.
    
-   $ git clone https://github.com/kamansoft/native-php-setup-tool.git 
-   $ cd native-php-setup-tool
+    $ git clone https://github.com/kamansoft/native-php-setup-tool.git 
+    $ cd native-php-setup-tool
 
 Then jsut run the script with the -i argument  and it will install all you need for a common php enviroment.
 
