@@ -16,9 +16,9 @@ Just clone the project and go to the project folder.
     $ git clone https://github.com/kamansoft/native-php-setup-tool.git 
     $ cd native-php-setup-tool
 
-Then jsut run the script with the -i argument  and it will install all you need for a common php enviroment.
+Then jsut run the script as sudo with the -i argument  and it will install all you need for a common php enviroment.
 
-    $ ./npstool -i
+    $ sudo ./npstool -i
 
 A set of things will happen then make sure to read every confirmation message before continuing.
 
