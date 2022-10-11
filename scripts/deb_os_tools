@@ -1,0 +1,142 @@
+#! /bin/bash 
+
+
+
+
+
+confirmation_message(){
+read -p "Are you sure to contnue ? [Y/n] " -n 1 -r
+if [[ ! $REPLY =~ ^[Yy]$ ]]
+then
+		echo "Script execution has ben cancel"
+		echo "Exiting..."
+    exit 1
+fi
+return 0
+}
+
+
+
+validate_installed_repo(){
+	if ! grep -q "^deb .*$1" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
+    return 1
+  else
+  	return 0
+	fi
+
+}
+
+
+get_os_info(){
+	export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
+	export CURRENT_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
+	return 0	
+}
+
+
+
+validate_distro_name(){
+	if [[ -z $CURRENT_DISTRO_NAME ]] ;then
+		get_os_info
+	fi
+	
+	for valid_distro in "$@";
+	do
+		if [[ $CURRENT_DISTRO_NAME == $valid_distro ]]; then
+			DETECTED_VALID_DISTRO_NAME=$CURRENT_DISTRO_NAME;
+			break
+		fi 
+	done
+
+	if [[ -z $DETECTED_VALID_DISTRO_NAME  ]]
+	then
+		echo ""
+	      echo "Unable to determinate your linux Distro name or the given one \"$CURRENT_DISTRO_NAME\" is not among the valid distro names." 
+	      echo "Valid distro names are:"
+	      for name in "$@"; do echo "$name"; done
+	      echo ""
+	      read -p "Please type one of the names from the above list to select it: " CURRENT_DISTRO_NAME
+	      validate_distro_name $@
+
+	else
+		echo ""
+	    echo "$DETECTED_VALID_DISTRO_NAME has been selected as your installation distro name"
+	fi
+
+	export CURRENT_DISTRO_NAME=$DETECTED_VALID_DISTRO_NAME
+	return 0
+
+}
+
+
+validate_distro_version(){
+
+	if [[ -z $CURRENT_DISTRO_VERSION ]] ;then
+		get_os_info
+	fi
+
+	for valid_distro in "$@";
+	do
+		if [[ $CURRENT_DISTRO_VERSION == $valid_distro ]]; then
+			DETECTED_VALID_DISTRO_VERSION=$CURRENT_DISTRO_VERSION;
+			break
+		fi 
+	done
+
+	if [[ -z $DETECTED_VALID_DISTRO_VERSION  ]]
+	then
+		echo ""
+	      echo "Unable to determinate your linux Distro version or the given one \"$CURRENT_DISTRO_VERSION\" is not among the valid distro versions." 
+	      echo "Valid distro versions are:"
+	      for version in "$@"; do echo "$version"; done
+	      echo ""
+	      read -p "Please type one of the versions from the above list to select it: " CURRENT_DISTRO_VERSION
+	      validate_distro_version $@
+
+	else
+		echo ""
+	    echo "$DETECTED_VALID_DISTRO_VERSION has been selected as your installation distro version"
+	fi
+
+	export CURRENT_DISTRO_VERSION=$DETECTED_VALID_DISTRO_VERSION
+	return 0
+
+}
+
+
+packages_installer(){
+validate_sudo
+CONFIRMATION=1
+PACKAGES=""
+for package in $@; do
+	if [ $package == "-y" ];then
+		CONFIRMATION=0
+	else
+		PACKAGES="$PACKAGES  $package"
+	fi
+done
+
+
+if [ $CONFIRMATION == 1 ];then
+	echo "This script will install the next packages:"
+	for package in $@; do
+		echo " $package"
+	done
+	confirmation_message
+	sudo apt install $@
+	return $?
+else 
+	sudo apt install -y $@
+	return $?
+fi
+
+
+}
+
+
+
+install_deb_repo_packages(){
+	echo "Installing common packages to add repositories and detect the name and version of your current os ..."
+	packages_installer curl wget gnupg2 ca-certificates lsb-release apt-transport-https 
+	return $?
+}

@@ -1,13 +1,31 @@
 # Native PHP Setup Tool
 A collection of scripts to install natively ( no containers nor virtualization ) and also configure a porper php + mariadb environment for laravel development on over Ubuntu or any other Debian based distros usign Nginx as http server.
 
-npstool is a rewrite bash script of the old dead [xnmp](https://github.com/lemyskaman/xnmp) tool, with more reobust options.
+
+This script is a handfull tool when you need a php enviroment (development or production) but with all the binaries installed natively in your operative system, no docker no vagrant, this is also a ideal tool to setup php servers on linux
+
+npstool is a rewrite of the the old dead [xnmp](https://github.com/lemyskaman/xnmp) bash script tool, with more reobust functionalities.
+
+This script is compatible only for debian and ubuntu is uses [sury php repos](https://deb.sury.org/) to allow you install multiple php versions on the same machine. The php installation option on this package also install commons php libraries for laravel.development, and is intend for nginx with fpm usage.
+
+
+### Usage
+
+Just clone the project and go to the project folder.
+   
+   $ git clone https://github.com/kamansoft/native-php-setup-tool.git 
+   $ cd native-php-setup-tool
+
+Then jsut run the script with the -i argument  and it will install all you need for a common php enviroment.
+
+    $ ./npstool -i
+
+A set of things will happen then make sure to read every confirmation message before continuing.
+
+You can also pass the --help argument in order to display some other options bundle in this script
+
   
-  
- This package uses [sury php repo](https://deb.sury.org/) to allow you install multiple php versions on the same machine. The php installation on this package also install comons php libraries for laravel development.
-  
- With help you get available params
-  
+
 
 
 
