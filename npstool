@@ -284,7 +284,11 @@ install_mariadb(){
 
 install_phpmyadmin(){
 	validate_sudo
-
+	PHPMYADMIN_VERSION="5.2.0"
+	PHPMYADMIN_USERNAME="phpmyadmin"
+	echo "This script will install install phpMyAdmin $PHP_VERSION."
+	echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fpm for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
+	confirmation_message
 	if [ ! $(which mysql) ]; then
 	    echo 'Please install Mariadb.'
 	    echo "You can install it running:"
@@ -306,14 +310,25 @@ install_phpmyadmin(){
 	    exit 1
   fi
 
+  
+  PHPMYADMIN_DOWNLOAD_URL="https://files.phpmyadmin.net/phpMyAdmin/$PHPMYADMIN_VERSION/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages.zip"
+  PHPMYADMIN_USER_PATH="/home/$PHPMYADMIN_USERNAME"
+  PHPMYADMIN_DOWNLOAD_PATH="$PHPMYADMIN_USER_PATH/phpmyadmin.zip"
+  PHPMYADMIN_EXTRACTION_PATH="$PHPMYADMIN_USER_PATH/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages"
+  PHPMYADMIN_PUBLIC_PATH="$PHPMYADMIN_USER_PATH/public_html"
   packages_installer unzip zip
   echo ""
-  echo "phpmyadmin user is needed"
-  sudo adduser -q phpmyadmin
+  echo "$PHPMYADMIN_USERNAME user is needed"
+  sudo adduser -q $PHPMYADMIN_USERNAME
   
-  sudo su phpmyadmin
-  exit 
+  sudo curl -o $PHPMYADMIN_DOWNLOAD_PATH $PHPMYADMIN_DOWNLOAD_URL
 
+
+  sudo unzip $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
+
+  sudo mv $PHPMYADMIN_EXTRACTION_PATH $PHPMYADMIN_PUBLIC_PATH
+
+  sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 
 
 
