@@ -1,5 +1,5 @@
-# Native PHP Setup Tool
-A collection of scripts to install natively ( no containers nor virtualization ) and also configure a porper php + mariadb environment for laravel development on over Ubuntu or any other Debian based distros usign Nginx as http server.
+# Native LEMP Tool
+A collection of scripts to install and configure a native "bare metal" ( no containers nor virtualization ) a linux + nginx + mariadb + php environment for laravel development on over Ubuntu or any other Debian based distros usign Nginx as http server.
 
 
 This script is a handfull tool when you need a php enviroment (development or production) but with all the binaries installed natively in your operative system, no docker no vagrant, this is also a ideal tool to setup php servers on linux
@@ -14,7 +14,7 @@ This script is compatible only for debian and ubuntu is uses [sury php repos](ht
 Just clone the project and go to the project folder.
    
     $ git clone https://github.com/kamansoft/native-php-setup-tool.git 
-    $ cd native-php-setup-tool
+    $ cd native-lemp-tool
 
 Then jsut run the script as sudo with the -i argument  and it will install all you need for a common php enviroment.
 
