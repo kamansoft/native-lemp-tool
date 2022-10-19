@@ -1,5 +1,5 @@
 # Native LEMP Tool
-A collection of scripts to install and configure a native "bare metal" ( no containers nor virtualization ) a linux + nginx + mariadb + php environment for laravel development on over Ubuntu or any other Debian based distros usign Nginx as http server.
+A collection of scripts to install and configure a native "bare metal" ( no containers nor virtualization ) a linux + nginx + mariadb + php environment for laravel development on over Ubuntu or any other Debian based distros usign php-fpm.
 
 
 This script is a handfull tool when you need a php enviroment (development or production) but with all the binaries installed natively in your operative system, no docker no vagrant, this is also a ideal tool to setup php servers on linux
