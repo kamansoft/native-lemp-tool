@@ -7,13 +7,15 @@ source scripts/deb_os_tools
 
 show_help(){
     echo ""
-    echo "npstool [--option1 --option2 ...] [--param1=value1 value2 --param2=value1 ...]"
+    echo "Usage:"
+    echo ""
+    echo "npstool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
     echo ""
     echo "Option arguments are value less, instead with param arguments you can pass"
     echo "string values after the (=) sing."
     echo ""
     echo "Arguments:"
-    echo "All arguments with (*) are mandatory"
+    echo ""
     echo " -i,   --install             Proceed to setup repo and install:"
     echo "                             nginx + php + mariadb + extra-laravel-development" 
     echo "                             deb packages. "
@@ -33,7 +35,7 @@ show_help(){
     echo ""
     echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
     echo "                             It does so using fpm, so it create a php-fpm with"
-    echo "                             a os user, also an nginx server "
+    echo "                             a os 'phpmyadmin' user, also it create an nginx server "
     echo ""	
 #	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
 #	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
@@ -268,38 +270,47 @@ install_mariadb(){
 
 install_phpmyadmin(){
     validate_sudo
+
+    if  ! php -v ; then
+        echo ""
+        echo "Please install php"
+    	echo "You can install it with:"
+        echo " $ ./npstool -p=<php-version>"
+        
+    	exit 1
+	fi
+
+    if  ! nginx -v ; then
+        echo ""
+        echo "Please install Nginx server"
+    	echo "You can install it with:"
+        echo " $ ./npstool -ng"
+        
+    	exit 1
+	fi
+
+    if  ! mysql -V ; then
+        echo ""
+        echo "Please install Mariadb or mysql"
+    	echo "You can install it with:"
+        echo " $ ./npstool -mdb"
+        
+    	exit 1
+	fi
+
     PHPMYADMIN_VERSION="5.2.0"
     PHPMYADMIN_USERNAME="phpmyadmin"
     echo "This script will install install phpMyAdmin $PHP_VERSION."
     echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fpm for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
     confirmation_message
-    if [ ! "$(which mysql)" ]; then
-        echo 'Please install Mariadb.'
-        echo "You can install it running:"
-        echo "$./npstool -mdb"
-        exit 1
-    fi
 
-    if [ ! "$(which php)" ]; then
-        echo 'Please install php.'
-        echo "You can instal it running:"
-        echo "$./npstool -p=8.0"
-        exit 1
-    fi
-
-    if [ ! "$(which nginx)" ]; then
-            echo 'Please install nginx.'
-            echo "You can instal it running:"
-            echo "$./npstool -ng"
-            exit 1
-    fi
 
   
     PHPMYADMIN_DOWNLOAD_URL="https://files.phpmyadmin.net/phpMyAdmin/$PHPMYADMIN_VERSION/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages.zip"
     PHPMYADMIN_USER_PATH="/home/$PHPMYADMIN_USERNAME"
     PHPMYADMIN_DOWNLOAD_PATH="$PHPMYADMIN_USER_PATH/phpmyadmin.zip"
     PHPMYADMIN_EXTRACTION_PATH="$PHPMYADMIN_USER_PATH/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages"
-    PHPMYADMIN_PUBLIC_PATH="$PHPMYADMIN_USER_PATH/public_html"
+    PHPMYADMIN_PUBLIC_PATH="/opt/$PHPMYADMIN_USERNAME"
     packages_installer unzip zip
     echo ""
     echo "$PHPMYADMIN_USERNAME user is needed"
@@ -314,6 +325,8 @@ install_phpmyadmin(){
 
     sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 
+    
+
 
 
 
@@ -325,6 +338,10 @@ install_phpmyadmin(){
 
 
 #-------------------Arguments Switcher-----------------------------------------#
+if [ -z "$*" ]; then 
+    echo "No argumets, you must pass at least one option or param"
+    show_help
+fi
 for i in "$@"
 do
 case $i in
@@ -340,48 +357,40 @@ case $i in
     install_php
     
     echo "Full batch instalation end "
-    exit
+    echo ""
+    echo ""
     shift # past arg
     ;;
     -pki=*|--package-install=*)
         packages_installer "${i#*=}"
-        exit $?
         shift # past arg
     ;;
 
     -ng*|--nginx-install*)
 
         install_nginx
-        exit $?
         shift # past arg
     ;;
     -mdb*|--mariadb-install*)
 
         install_mariadb
-        exit $?
         shift # past arg
     ;;
     -p=*|--php-install=*)
         install_php "${i#*=}"
-        exit $?
         shift # past arg
     ;;
     --phpmyadmin-install*)
         install_phpmyadmin 
-        exit $?
         shift # past arg
     ;;
     *)
-            echo "Invalid Argument" 
-        show_help
-        exit 1
+        #echo "Invalid Argument" 
+        #show_help
+        #exit 1
     ;;
 
 esac
 done
 
 
-if [ -z "$*" ]; then 
-    echo "Empty arguments are not valid"
-    show_help
-fi
