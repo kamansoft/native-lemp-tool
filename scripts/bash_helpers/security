@@ -1,0 +1,13 @@
+#!/bin/bash
+
+generate_secure_pass(){
+	
+	if [ ! $(which uuencode) ]; then
+		echo "uuencode command not found"
+    	echo 'Please install sharutils package'
+    	exit 1
+	fi
+
+	dd if=/dev/urandom count=1 2> /dev/null | uuencode -m - | sed -ne 2p | cut -c-12
+	return 0
+}

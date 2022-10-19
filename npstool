@@ -1,9 +1,9 @@
 #! /bin/bash 
 
-source ./scripts/deb_os_tools
+# shellcheck source=scripts/deb_os_tools
+source scripts/deb_os_tools
 
 
-INSTALL=false
 
 show_help(){
 	echo ""
@@ -53,26 +53,11 @@ show_help(){
 
 
 
-validate_user(){
-  LINUX_USER=""
-  valid_users=( $(cat /etc/passwd | cut -d: -f1) )
-
-  echo "Validating linux user: $1"
-  echo ""
-  export VALUE_SELECTED_FROM_ARGS
-  if [[ -n $1 ]];then
-   . ./scripts/bash_helpers/in_arguments $1 "${valid_users[@]}"
-  else
-   . ./scripts/bash_helpers/in_arguments "unspecified" "${validvalid_users[@]}"
-  fi
-  export LINUX_USER=$VALUE_SELECTED_FROM_ARGS
-
-}
 
 restart_php(){
-	validate_php_version $1
+	validate_php_version "$1"
   echo "Restarting php fpm..."
-	sudo systemctl restart php$PHP_VERSION-fpm
+	sudo systemctl restart php"$PHP_VERSION"-fpm
 }
 
 
@@ -90,7 +75,7 @@ validate_php_version(){
   export VALUE_SELECTED_FROM_ARGS
   if [[ -n $PROSPECT_VERSION ]];then
    echo "Checking if php version $PROSPECT_VERSION is among the valid ones for this script to use."
-   . ./scripts/bash_helpers/in_arguments $PROSPECT_VERSION "${valid_php_versions[@]}"
+   . ./scripts/bash_helpers/in_arguments "$PROSPECT_VERSION" "${valid_php_versions[@]}"
   else
   	echo "You must pick a valid php version for this script to use"
    . ./scripts/bash_helpers/in_arguments "x.x" "${valid_php_versions[@]}"
@@ -99,48 +84,47 @@ validate_php_version(){
 }
 
 install_php(){
-	validate_sudo
+    validate_sudo
 
 
-	validate_php_version $1
+	validate_php_version "$1"
   
-  echo "If not setted, this script will install the deb.sury.org php repo."
-  echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
-  install_deb_repo_packages
-	validate_distro_name "Ubuntu" "Debian"
-  
-  if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
-  	PPA_UBUNTU_REPO="ondrej/php" 
-  	validate_installed_repo $PPA_UBUNTU_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
-  		echo "Adding $PPA_UBUNTU_REPO ppa repository"
-  		sudo add-apt-repository ppa:ondrej/php
-  	else 
-  		echo "The $PPA_UBUNTU_REPO repository is already installed."
+	echo "If not setted, this script will install the deb.sury.org php repo."
+	echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+	install_deb_repo_packages
+		validate_distro_name "Ubuntu" "Debian"
+	
+	if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
+		PPA_UBUNTU_REPO="ondrej/php" 
+		validate_installed_repo $PPA_UBUNTU_REPO
+		if [[ "$?" -eq 1 ]]; then
+			echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
+			echo "Adding $PPA_UBUNTU_REPO ppa repository"
+			sudo add-apt-repository ppa:ondrej/php
+		else 
+			echo "The $PPA_UBUNTU_REPO repository is already installed."
 
-  	fi
-  fi 
-  if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
-  	DEBIAN_REPO="https://packages.sury.org/php/ $(lsb_release -sc) main"
-  	validate_installed_repo $DEBIAN_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "Adding the $DEBIAN_REPO repository"
-  		GPG_URL=https://packages.sury.org/php/apt.gpg
-  		GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
-  		UNSIGNED_REPO="deb $DEBIAN_REPO "
-  		echo $UNSIGNED_REPO | sudo tee /etc/apt/sources.list.d/sury-php.list
-  		curl -fsSL  $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
- 		
-  	else 
-  		echo "sury Nginx mainline repo already installed "
-  	fi
-  fi
-  sudo apt update
-  echo "Installing php fpm and related packages"     
-	packages_installer -y  php$PHP_VERSION-{fpm,sqlite3,mysql,xml,xmlrpc,curl,gd,imagick,cli,dev,imap,mbstring,opcache,soap,zip,intl,bcmath,bz2,xdebug,ctype,gmp,bcmath,dev} php$PHP_VERSION 
-
-	if [[ "$?" -eq 0 ]]; then
+		fi
+	fi 
+	if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
+		DEBIAN_REPO="https://packages.sury.org/php/ $(lsb_release -sc) main"
+		validate_installed_repo "$DEBIAN_REPO"
+		if [[ "$?" -eq 1 ]]; then
+			echo "Adding the $DEBIAN_REPO repository"
+			GPG_URL=https://packages.sury.org/php/apt.gpg
+			GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
+			UNSIGNED_REPO="deb $DEBIAN_REPO "
+			echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/sury-php.list
+			curl -fsSL  "$GPG_URL" | sudo gpg --dearmor -o $GPG_KEY_PATH
+			
+		else 
+			echo "sury Nginx mainline repo already installed "
+		fi
+	fi
+	sudo apt update
+	echo "Installing php fpm and related packages"  
+	PHP_PACKAGES="-y php$PHP_VERSION-{fpm,sqlite3,mysql,xml,xmlrpc,curl,gd,imagick,cli,dev,imap,mbstring,opcache,soap,zip,intl,bcmath,bz2,xdebug,ctype,gmp,bcmath,dev} php$PHP_VERSION"
+	if  packages_installer "$PHP_PACKAGES"z; then
 		echo "Composer will be installed"
 		confirmation_message
 		wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
@@ -187,7 +171,7 @@ install_nginx(){
   if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
   	
   	DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
-  	validate_installed_repo $DEBIAN_REPO
+  	validate_installed_repo "$DEBIAN_REPO"
   	if [[ "$?" -eq 1 ]]; then
   		echo "Adding the $DEBIAN_REPO repository"
   		
@@ -197,7 +181,7 @@ install_nginx(){
   		#SIGNED_DEBIAN_REPO="deb [signed-by=$GPG_KEY_PATH] $DEBIAN_REPO " 
   		UNSIGNED_REPO="deb $DEBIAN_REPO "
 
-  		echo $UNSIGNED_REPO | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
+  		echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
 
 
   		#sudo curl -sSLo $GPG_KEY_PATH https://packages.sury.org/nginx-mainline/apt.gpg
@@ -289,21 +273,21 @@ install_phpmyadmin(){
 	echo "This script will install install phpMyAdmin $PHP_VERSION."
 	echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fpm for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
 	confirmation_message
-	if [ ! $(which mysql) ]; then
+	if [ ! "$(which mysql)" ]; then
 	    echo 'Please install Mariadb.'
 	    echo "You can install it running:"
 	    echo "$./npstool -mdb"
 	    exit 1
 	fi
 
-	if [ ! $(which php) ]; then
+	if [ ! "$(which php)" ]; then
 	    echo 'Please install php.'
 	    echo "You can instal it running:"
 	    echo "$./npstool -p=8.0"
 	    exit 1
   fi
 
-  if [ ! $(which nginx) ]; then
+  if [ ! "$(which nginx)" ]; then
 	    echo 'Please install nginx.'
 	    echo "You can instal it running:"
 	    echo "$./npstool -ng"
@@ -360,7 +344,7 @@ case $i in
     shift # past arg
     ;;
     -pki=*|--package-install=*)
-    	packages_installer ${i#*=}
+    	packages_installer "${i#*=}"
     	exit $?
     	shift # past arg
     ;;
@@ -378,7 +362,7 @@ case $i in
 	    shift # past arg
     ;;
     -p=*|--php-install=*)
-	    install_php ${i#*=}
+	    install_php "${i#*=}"
 	    exit $?
 	    shift # past arg
     ;;
@@ -397,7 +381,7 @@ esac
 done
 
 
-if [ -z "$@" ]; then 
+if [ -z "$*" ]; then 
 	echo "Empty arguments are not valid"
 	show_help
 fi
