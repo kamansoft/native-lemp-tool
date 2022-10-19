@@ -123,8 +123,8 @@ install_php(){
 	fi
 	sudo apt update
 	echo "Installing php fpm and related packages"  
-	PHP_PACKAGES="-y php$PHP_VERSION-{fpm,sqlite3,mysql,xml,xmlrpc,curl,gd,imagick,cli,dev,imap,mbstring,opcache,soap,zip,intl,bcmath,bz2,xdebug,ctype,gmp,bcmath,dev} php$PHP_VERSION"
-	if  packages_installer "$PHP_PACKAGES"z; then
+	PHP_PACKAGES="-y php$PHP_VERSION php$PHP_VERSION-fpm php$PHP_VERSION-sqlite3 php$PHP_VERSION-mysql php$PHP_VERSION-xml php$PHP_VERSION-xmlrpc php$PHP_VERSION-curl php$PHP_VERSION-gd php$PHP_VERSION-imagick php$PHP_VERSION-cli php$PHP_VERSION-dev php$PHP_VERSION-imap php$PHP_VERSION-mbstring php$PHP_VERSION-opcache php$PHP_VERSION-soap php$PHP_VERSION-zip php$PHP_VERSION-intl php$PHP_VERSION-bcmath php$PHP_VERSION-bz2 php$PHP_VERSION-xdebug php$PHP_VERSION-ctype php$PHP_VERSION-gmp php$PHP_VERSION-bcmath php$PHP_VERSION-dev php$PHP_VERSION"
+	if  packages_installer "$PHP_PACKAGES"; then
 		echo "Composer will be installed"
 		confirmation_message
 		wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
