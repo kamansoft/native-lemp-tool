@@ -363,9 +363,22 @@ install_phpmyadmin(){
     echo "if your domain is 'yourdomain.com' the phpmyadmin 'server_name' directive"
     echo "of your nginx server unit file will point to $PHPMYADMIN_USERNAME.yourdomain.com."
     echo ""
-    echo "Please type the domain that your phpmyadmin installation will use:"
+    
 
-    read -r PHPMYADMIN_DOMAIN
+    for (( ; ; ))
+    do
+        echo "Please type the domain that your phpmyadmin installation will use:"
+        read -r PHPMYADMIN_DOMAIN
+        echo ""
+        echo "Are you sure the domain to use is $PHPMYADMIN_DOMAIN ? [Y/n] "
+        read -r SURE_OF_DOMAIN
+        if [[ $SURE_OF_DOMAIN = "Y" ]];then 
+            break
+        fi
+    done
+    
+
+    echo "Are you "
 
     export PHPMYADMIN_DOMAIN="$PHPMYADMIN_USERNAME.$PHPMYADMIN_DOMAIN"
     export PHPMYADMIN_PUBLIC_PATH
