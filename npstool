@@ -270,7 +270,7 @@ install_mariadb(){
 
 install_phpmyadmin(){
     validate_sudo
-
+    echo ""
     if  ! php -v ; then
         echo ""
         echo "Please install php"
@@ -280,15 +280,16 @@ install_phpmyadmin(){
     	exit 1
 	fi
 
+    echo ""
     if  ! nginx -v ; then
         echo ""
         echo "Please install Nginx server"
     	echo "You can install it with:"
         echo " $ ./npstool -ng"
-        
     	exit 1
 	fi
 
+    echo ""
     if  ! mysql -V ; then
         echo ""
         echo "Please install Mariadb or mysql"
@@ -297,10 +298,18 @@ install_phpmyadmin(){
         
     	exit 1
 	fi
+    echo ""
+    if ! which "envsubst" ; then
+        echo ""
+        echo "envsubst command not found"
+        echo "Please install  gettext-base package"
+
+        exit 
+    fi
 
     PHPMYADMIN_VERSION="5.2.0"
     PHPMYADMIN_USERNAME="phpmyadmin"
-    echo "This script will install install phpMyAdmin $PHP_VERSION."
+    echo "This script will install install phpMyAdmin $PHPMYADMIN_VERSION."
     echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fpm for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
     confirmation_message
 
@@ -311,27 +320,77 @@ install_phpmyadmin(){
     PHPMYADMIN_DOWNLOAD_PATH="$PHPMYADMIN_USER_PATH/phpmyadmin.zip"
     PHPMYADMIN_EXTRACTION_PATH="$PHPMYADMIN_USER_PATH/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages"
     PHPMYADMIN_PUBLIC_PATH="/opt/$PHPMYADMIN_USERNAME"
+
     packages_installer unzip zip
     echo ""
     echo "$PHPMYADMIN_USERNAME user is needed"
+    
     sudo adduser -q $PHPMYADMIN_USERNAME
     
     sudo curl -o $PHPMYADMIN_DOWNLOAD_PATH $PHPMYADMIN_DOWNLOAD_URL
 
 
-    sudo unzip $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
+    sudo unzip -o $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
 
+    if [ -d $PHPMYADMIN_PUBLIC_PATH ] ; then 
+        echo "$PHPMYADMIN_PUBLIC_PATH already exists"
+        echo "If you continue it will be overwritten with the new instalation content"
+        confirmation_message
+        echo " deleting $PHPMYADMIN_PUBLIC_PATH"
+        rm -r $PHPMYADMIN_PUBLIC_PATH
+    fi 
+    
     sudo mv $PHPMYADMIN_EXTRACTION_PATH $PHPMYADMIN_PUBLIC_PATH
 
+    cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
     sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 
+    CURRENT_PHP_VERSION=$(php -v | grep PHP)
+    CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+    PHP_FPM_PATH="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d" 
+
+    cp "templates/phpmyadmin/php/phpmyadmin.conf" "$PHP_FPM_PATH/$PHPMYADMIN_USERNAME.conf"
+
+    if ! systemctl restart  php"$CURRENT_PHP_VERSION"-fpm ; then
+        echo "The php fpm service is not starting"
+        exit
+    fi
+
+
+    echo "A domain for phpmyadmin nginx server is needed."
+    echo ""
+    echo "A nginx server unit file will be created using $PHPMYADMIN_USERNAME subdomain,"
+    echo "if your domain is 'yourdomain.com' the phpmyadmin 'server_name' directive"
+    echo "of your nginx server unit file will point to $PHPMYADMIN_USERNAME.yourdomain.com."
+    echo ""
+    echo "Please type the domain that your phpmyadmin installation will use:"
+
+    read -r PHPMYADMIN_DOMAIN
+
+    export PHPMYADMIN_DOMAIN="$PHPMYADMIN_USERNAME.$PHPMYADMIN_DOMAIN"
+    export PHPMYADMIN_PUBLIC_PATH
+
+    NGINX_AVAILABLE_SERVERS_PATH="/etc/nginx/sites-available"
+    NGINX_ENABLED_SERVERS_PATH="/etc/nginx/sites-enabled"
+
+    PHPMYADMIN_SERVER_UNIT_FILE="$NGINX_AVAILABLE_SERVERS_PATH/$PHPMYADMIN_DOMAIN"
+    PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH="$NGINX_ENABLED_SERVERS_PATH/$PHPMYADMIN_DOMAIN" 
+
+    cat "templates/phpmyadmin/nginx/server_template" | envsubst > "$PHPMYADMIN_SERVER_UNIT_FILE"
+
+    ln -s "$PHPMYADMIN_SERVER_UNIT_FILE" "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+
+    if ! nginx -t ; then 
+        echo ""
+        echo "Error in some of your sever uinits"
+        echo "Please correc it and run the command again"
+        exit 1
+    fi
+
+    systemctl restart nginx
+
+
     
-
-
-
-
-
-
 }
 
 
@@ -381,7 +440,9 @@ case $i in
         shift # past arg
     ;;
     --phpmyadmin-install*)
-        install_phpmyadmin 
+        install_phpmyadmin     
+
+
         shift # past arg
     ;;
     *)
@@ -389,7 +450,6 @@ case $i in
         #show_help
         #exit 1
     ;;
-
 esac
 done
 
