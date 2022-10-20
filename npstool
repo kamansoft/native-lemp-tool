@@ -1,36 +1,42 @@
 #! /bin/bash 
 
-source ./scripts/deb_os_tools
+# shellcheck source=scripts/deb_os_tools
+source scripts/deb_os_tools
 
 
-INSTALL=false
 
 show_help(){
-	echo ""
-	echo "npstool [--option1 --option2 ...] [--param1=value1 value2 --param2=value1 ...]"
-	echo ""
-	echo "Option arguments are value less, instead with param arguments you can pass"
-	echo "string values after the (=) sing."
-	echo ""
-	echo "Arguments:"
-	echo "All arguments with (*) are mandatory"
-	echo " -i,   --install             Proceed to setup repo and install:"
-	echo "                             nginx + php + mariadb + extra-laravel-development" 
-	echo "                             deb packages. "
-	echo ""
-	echo " -pki= --package-install=    Install os packages."
-	echo "                             Usage example:  "
-	echo "                                 $ ./npstool -pki=htop nginx git"
-	echo ""
-	echo " -ng   --nginx-install       Install Nginx server."
-	echo ""
-	echo " -mdb  --mariadb-install     Install Mariadb version 10.6."
-	echo ""
-	echo " -p=,  --php-install=        Install a php version on system with dependencies"
-	echo "                             for laravel development, also it installs"
-	echo "                             omposer, when used the php version must be passed"
-	echo "                             as param value."
-	echo ""
+    echo ""
+    echo "Usage:"
+    echo ""
+    echo "npstool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
+    echo ""
+    echo "Option arguments are value less, instead with param arguments you can pass"
+    echo "string values after the (=) sing."
+    echo ""
+    echo "Arguments:"
+    echo ""
+    echo " -i,   --install             Proceed to setup repo and install:"
+    echo "                             nginx + php + mariadb + extra-laravel-development" 
+    echo "                             deb packages. "
+    echo ""
+    echo " -pki= --package-install=    Install os packages."
+    echo "                             Usage example:  "
+    echo "                                 $ ./npstool -pki=htop nginx git"
+    echo ""
+    echo " -ng   --nginx-install       Install Nginx server."
+    echo ""
+    echo " -mdb  --mariadb-install     Install Mariadb version 10.6."
+    echo ""
+    echo " -p=,  --php-install=        Install a php version on system with dependencies"
+    echo "                             for laravel development, also it installs"
+    echo "                             omposer, when used the php version must be passed"
+    echo "                             as param value."
+    echo ""
+    echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
+    echo "                             It does so using fpm, so it create a php-fpm with"
+    echo "                             a os 'phpmyadmin' user, also it create an nginx server "
+    echo ""	
 #	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
 #	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
 #	echo "                             the domanin name as value for this option"
@@ -43,119 +49,92 @@ show_help(){
 #	echo ""
 #	echo "                                                                                   -"
 
-	return 0
+    return 0
 }
 
 
 
 
-
-
-validate_sudo(){
-	if (( $EUID != 0 )); then
-    echo "Please run as root"
-    exit 1
-	fi
-}
-
-
-
-
-
-
-
-
-validate_user(){
-  LINUX_USER=""
-  valid_users=( $(cat /etc/passwd | cut -d: -f1) )
-
-  echo "Validating linux user: $1"
-  echo ""
-  export VALUE_SELECTED_FROM_ARGS
-  if [[ -n $1 ]];then
-   . ./scripts/bash_helpers/in_arguments $1 "${valid_users[@]}"
-  else
-   . ./scripts/bash_helpers/in_arguments "unspecified" "${validvalid_users[@]}"
-  fi
-  export LINUX_USER=$VALUE_SELECTED_FROM_ARGS
-
-}
 
 restart_php(){
-  echo "Restarting php fpm..."
-	sudo systemctl restart php$1-fpm
+    validate_php_version "$1"
+    echo "Restarting php fpm..."
+    sudo systemctl restart php"$PHP_VERSION"-fpm
 }
 
 
 install_extra_packages_for_laravel_dev(){
 
-	validate_sudo
-	extra_packages=("git" "sqlite3" "nodejs" "npm")
+    validate_sudo
+    extra_packages=("git" "sqlite3" "nodejs" "npm")
 
-	packages_installer -y "${extra_packages[@]}" 
+    packages_installer -y "${extra_packages[@]}" 
 }
 
 validate_php_version(){
-  valid_php_versions=("8.0" "7.4" "7.3")
-	PROSPECT_VERSION=$1
-  export VALUE_SELECTED_FROM_ARGS
-  if [[ -n $PROSPECT_VERSION ]];then
-   echo "Checking if php version $PROSPECT_VERSION is among the valid ones for this script to use."
-   . ./scripts/bash_helpers/in_arguments $PROSPECT_VERSION "${valid_php_versions[@]}"
-  else
-  	echo "You must pick a valid php version for this script to use"
-   . ./scripts/bash_helpers/in_arguments "x.x" "${valid_php_versions[@]}"
-  fi
-  export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
+    valid_php_versions=("8.0" "7.4" "7.3")
+        PROSPECT_VERSION=$1
+    export VALUE_SELECTED_FROM_ARGS
+    if [[ -n $PROSPECT_VERSION ]];then
+    echo "Checking if php version $PROSPECT_VERSION is among the valid ones for this script to use."
+    . ./scripts/bash_helpers/in_arguments "$PROSPECT_VERSION" "${valid_php_versions[@]}"
+    else
+        echo "You must pick a valid php version for this script to use"
+    . ./scripts/bash_helpers/in_arguments "x.x" "${valid_php_versions[@]}"
+    fi
+    export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
 }
 
 install_php(){
-	validate_sudo
+    validate_sudo
 
 
-	validate_php_version $1
+    validate_php_version "$1"
   
-  echo "If not setted, this script will install the deb.sury.org php repo."
-  echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
-	validate_distro_name "Ubuntu" "Debian"
-  
-  if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
-  	PPA_UBUNTU_REPO="ondrej/php" 
-  	validate_installed_repo $PPA_UBUNTU_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
-  		echo "Adding $PPA_UBUNTU_REPO ppa repository"
-  		sudo add-apt-repository ppa:ondrej/php
-  	else 
-  		echo "The $PPA_UBUNTU_REPO repository is already installed."
+    echo "If not setted, this script will install the deb.sury.org php repo."
+    echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+    install_deb_repo_packages
+        validate_distro_name "Ubuntu" "Debian"
+    
+    if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
+        PPA_UBUNTU_REPO="ondrej/php" 
+        validate_installed_repo $PPA_UBUNTU_REPO
+        if [[ "$?" -eq 1 ]]; then
+            echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
+            echo "Adding $PPA_UBUNTU_REPO ppa repository"
+            sudo add-apt-repository ppa:ondrej/php
+        else 
+            echo "The $PPA_UBUNTU_REPO repository is already installed."
 
-  	fi
-  fi 
-  if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
-  	DEBIAN_REPO="https://packages.sury.org/php/ $(lsb_release -sc) main"
-  	validate_installed_repo $DEBIAN_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "Adding the $DEBIAN_REPO repository"
-  		GPG_URL=https://packages.sury.org/php/apt.gpg
-  		GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
-  		UNSIGNED_REPO="deb $DEBIAN_REPO "
-  		echo $UNSIGNED_REPO | sudo tee /etc/apt/sources.list.d/sury-php.list
-  		curl -fsSL  $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
- 		
-  	else 
-  		echo "sury Nginx mainline repo already installed "
-  	fi
-  fi
-  sudo apt update
-  echo "Installing php fpm and related packages"     
-	packages_installer -y  php$PHP_VERSION-{fpm,sqlite3,mysql,xml,xmlrpc,curl,gd,imagick,cli,dev,imap,mbstring,opcache,soap,zip,intl,bcmath,bz2,xdebug,ctype,gmp,bcmath,dev} php$PHP_VERSION 
+        fi
+    fi 
+    if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
+        DEBIAN_REPO="https://packages.sury.org/php/ $(lsb_release -sc) main"
+        validate_installed_repo "$DEBIAN_REPO"
+        if [[ "$?" -eq 1 ]]; then
+            echo "Adding the $DEBIAN_REPO repository"
+            GPG_URL=https://packages.sury.org/php/apt.gpg
+            GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
+            UNSIGNED_REPO="deb $DEBIAN_REPO "
+            echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/sury-php.list
+            curl -fsSL  "$GPG_URL" | sudo gpg --dearmor -o $GPG_KEY_PATH
+            
+        else 
+            echo "sury Nginx mainline repo already installed "
+        fi
+    fi
+    sudo apt update
+    echo "Installing php fpm and related packages"  
+    PHP_PACKAGES="-y php$PHP_VERSION php$PHP_VERSION-fpm php$PHP_VERSION-sqlite3 php$PHP_VERSION-mysql php$PHP_VERSION-xml php$PHP_VERSION-xmlrpc php$PHP_VERSION-curl php$PHP_VERSION-gd php$PHP_VERSION-imagick php$PHP_VERSION-cli php$PHP_VERSION-dev php$PHP_VERSION-imap php$PHP_VERSION-mbstring php$PHP_VERSION-opcache php$PHP_VERSION-soap php$PHP_VERSION-zip php$PHP_VERSION-intl php$PHP_VERSION-bcmath php$PHP_VERSION-bz2 php$PHP_VERSION-xdebug php$PHP_VERSION-ctype php$PHP_VERSION-gmp php$PHP_VERSION-bcmath php$PHP_VERSION-dev php$PHP_VERSION"
+    if  packages_installer "$PHP_PACKAGES"; then
+        echo "Composer will be installed"
+        confirmation_message
+        wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
+        sudo mv composer.phar /usr/local/bin/composer
+        install_extra_packages_for_laravel_dev
+    fi
 
-	if [[ "$?" -eq 0 ]]; then
-		echo "Composer will be installed"
-		confirmation_message
-		wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
-		sudo mv composer.phar /usr/local/bin/composer
-	fi
+
 
 }
 
@@ -165,64 +144,64 @@ install_nginx(){
 
 
 
-	validate_sudo
-	echo "This script will uninstall current version of nginx if installed."
-	echo "Also will install the sury nginx-mainline repo to work with sury php repositories"
-	echo "Then, this script will install lastet version of nginx server "
-  confirmation_message
+    validate_sudo
+    echo "This script will uninstall current version of nginx if installed."
+    echo "Also will install the sury nginx-mainline repo to work with sury php repositories"
+    echo "Then, this script will install lastet version of nginx server "
+    confirmation_message
 
-  sudo systemctl stop nginx
-  sudo apt-get -y autoremove nginx*
+    sudo systemctl stop nginx
+    sudo apt-get -y autoremove nginx*
 
-  echo "Some packages are needed in order to repository manipulation (install or detected sury mainline nginx  repositories also for nginx installation)."
-	install_deb_repo_packages
-  validate_distro_name "Ubuntu" "Debian"
+    echo "Some packages are needed in order to repository manipulation (install or detected sury mainline nginx  repositories also for nginx installation)."
+    install_deb_repo_packages
+    validate_distro_name "Ubuntu" "Debian"
 
-  if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
+    if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
 
-		PPA_UBUNTU_REPO="ondrej/nginx-mainline" 
-  	validate_installed_repo $PPA_UBUNTU_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
-  		echo "Adding $PPA_UBUNTU_REPO ppa repository"
-  		sudo add-apt-repository  -y ppa:$PPA_UBUNTU_REPO
-  	else 
-  		echo "The $PPA_UBUNTU_REPO repository is already installed."
+        PPA_UBUNTU_REPO="ondrej/nginx-mainline" 
+        validate_installed_repo $PPA_UBUNTU_REPO
+        if [[ "$?" -eq 1 ]]; then
+            echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
+            echo "Adding $PPA_UBUNTU_REPO ppa repository"
+            sudo add-apt-repository  -y ppa:$PPA_UBUNTU_REPO
+        else 
+            echo "The $PPA_UBUNTU_REPO repository is already installed."
 
-  	fi
-  fi 
-  if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
-  	
-  	DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
-  	validate_installed_repo $DEBIAN_REPO
-  	if [[ "$?" -eq 1 ]]; then
-  		echo "Adding the $DEBIAN_REPO repository"
-  		
-  		GPG_URL=https://packages.sury.org/nginx-mainline/apt.gpg
-  		#GPG_KEY_PATH="/usr/share/keyrings/deb.sury.org-nginx-mainline.gpg"
-  		GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-nginx-mainline-keyring.gpg"
-  		#SIGNED_DEBIAN_REPO="deb [signed-by=$GPG_KEY_PATH] $DEBIAN_REPO " 
-  		UNSIGNED_REPO="deb $DEBIAN_REPO "
+        fi
+    fi 
+    if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
+        
+        DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
+        validate_installed_repo "$DEBIAN_REPO"
+        if [[ "$?" -eq 1 ]]; then
+            echo "Adding the $DEBIAN_REPO repository"
+            
+            GPG_URL=https://packages.sury.org/nginx-mainline/apt.gpg
+            #GPG_KEY_PATH="/usr/share/keyrings/deb.sury.org-nginx-mainline.gpg"
+            GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-nginx-mainline-keyring.gpg"
+            #SIGNED_DEBIAN_REPO="deb [signed-by=$GPG_KEY_PATH] $DEBIAN_REPO " 
+            UNSIGNED_REPO="deb $DEBIAN_REPO "
 
-  		echo $UNSIGNED_REPO | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
-
-
-  		#sudo curl -sSLo $GPG_KEY_PATH https://packages.sury.org/nginx-mainline/apt.gpg
-  		curl -fsSL  $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
-  		
-  		 
-  		
-  		#sudo sh -c "echo $SIGNED_DEBIAN_REPO >/etc/apt/sources.list.d/nginx-mainline.list"
-  	else 
-  		echo "sury Nginx mainline repo already installed "
-  	fi
-
-  fi
+            echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
 
 
-  echo "Installing nginx and related packages"
-  sudo apt update
-  packages_installer nginx-core nginx-common nginx nginx-full -y
+            #sudo curl -sSLo $GPG_KEY_PATH https://packages.sury.org/nginx-mainline/apt.gpg
+            curl -fsSL  $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
+            
+            
+            
+            #sudo sh -c "echo $SIGNED_DEBIAN_REPO >/etc/apt/sources.list.d/nginx-mainline.list"
+        else 
+            echo "sury Nginx mainline repo already installed "
+        fi
+
+    fi
+
+
+    echo "Installing nginx and related packages"
+    sudo apt update
+    packages_installer nginx-core nginx-common nginx nginx-full -y
 
 
 
@@ -238,115 +217,254 @@ install_nginx(){
 
 install_mariadb(){
 
-	validate_sudo
+    validate_sudo
 
 
-	echo "If Official repositories for Mariadb 10.6 are not set, this script will add it, after it will install Mariadb 10.6 in this machine"
-	confirmation_message
-	
-	validate_distro_name "Ubuntu" "Debian"
+    echo "If Official repositories for Mariadb 10.6 are not set, this script will add it, after it will install Mariadb 10.6 in this machine"
+    confirmation_message
+    
+    validate_distro_name "Ubuntu" "Debian"
 
-	BASE_MARIADB_REPO_URL="https://mirror.rackspace.com/mariadb/repo/10.6/${CURRENT_DISTRO_NAME,,}"	
-	
-	echo "Some packages are needed in order to repository manipulation (install or detected mariadb official repositories also for maria db installation)."
-	
-	install_deb_repo_packages
-	
-	validate_installed_repo "$BASE_MARIADB_REPO_URL"
+    BASE_MARIADB_REPO_URL="https://mirror.rackspace.com/mariadb/repo/10.6/${CURRENT_DISTRO_NAME,,}"	
+    
+    echo "Some packages are needed in order to repository manipulation (install or detected mariadb official repositories also for maria db installation)."
+    
+    install_deb_repo_packages
+    
+    validate_installed_repo "$BASE_MARIADB_REPO_URL"
 
-	if [[ "$?" -eq 1 ]]; then
-		echo ""
-		echo "Official MariaDB repositeries where NOT found..."
-		
+    if [[ "$?" -eq 1 ]]; then
+        echo ""
+        echo "Official MariaDB repositeries where NOT found..."
+        
 
-		MARIA_DB_REPO=""
-		if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
-			#echo "FOR UBUNTU"
-			validate_distro_version focal jammy
-			MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
-			#echo "$MARIA_DB_REPO"
-		fi
-		if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
-			#echo "FOR DEBIAN"
-			validate_distro_version stretch buster bullseye
-			MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
-			#echo "$MARIA_DB_REPO"
-		fi
-		echo "Adding repository gpg key..."
-		sudo curl -o /etc/apt/trusted.gpg.d/mariadb_release_signing_key.asc 'https://mariadb.org/mariadb_release_signing_key.asc'	
-		echo "Adding the repository to sources list: $MARIA_DB_REPO "
-		sudo sh -c "echo '$MARIA_DB_REPO' >>/etc/apt/sources.list"
-		echo ""
-	else 
-		echo ""
-		echo "Official MariaDB repository where found..."
+        MARIA_DB_REPO=""
+        if [[ $CURRENT_DISTRO_NAME == Ubuntu  ]]; then
+            #echo "FOR UBUNTU"
+            validate_distro_version focal jammy
+            MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
+            #echo "$MARIA_DB_REPO"
+        fi
+        if [[ $CURRENT_DISTRO_NAME == Debian  ]]; then
+            #echo "FOR DEBIAN"
+            validate_distro_version stretch buster bullseye
+            MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
+            #echo "$MARIA_DB_REPO"
+        fi
+        echo "Adding repository gpg key..."
+        sudo curl -o /etc/apt/trusted.gpg.d/mariadb_release_signing_key.asc 'https://mariadb.org/mariadb_release_signing_key.asc'	
+        echo "Adding the repository to sources list: $MARIA_DB_REPO "
+        sudo sh -c "echo '$MARIA_DB_REPO' >>/etc/apt/sources.list"
+        echo ""
+    else 
+        echo ""
+        echo "Official MariaDB repository where found..."
+    fi
+    echo ""
+    echo "Continuing with maria db package install"
+    sudo apt update
+    packages_installer -y mariadb-server-10.6 
+
+}
+
+
+install_phpmyadmin(){
+    validate_sudo
+    echo ""
+    if  ! php -v ; then
+        echo ""
+        echo "Please install php"
+    	echo "You can install it with:"
+        echo " $ ./npstool -p=<php-version>"
+        
+    	exit 1
 	fi
-	echo ""
-	echo "Continuing with maria db package install"
-	sudo apt update
-  packages_installer -y mariadb-server-10.6 
 
+    echo ""
+    if  ! nginx -v ; then
+        echo ""
+        echo "Please install Nginx server"
+    	echo "You can install it with:"
+        echo " $ ./npstool -ng"
+    	exit 1
+	fi
+
+    echo ""
+    if  ! mysql -V ; then
+        echo ""
+        echo "Please install Mariadb or mysql"
+    	echo "You can install it with:"
+        echo " $ ./npstool -mdb"
+        
+    	exit 1
+	fi
+    echo ""
+    if ! which "envsubst" ; then
+        echo ""
+        echo "envsubst command not found"
+        echo "Please install  gettext-base package"
+
+        exit 
+    fi
+
+    PHPMYADMIN_VERSION="5.2.0"
+    PHPMYADMIN_USERNAME="phpmyadmin"
+    echo "This script will install install phpMyAdmin $PHPMYADMIN_VERSION."
+    echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fpm for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
+    confirmation_message
+
+
+  
+    PHPMYADMIN_DOWNLOAD_URL="https://files.phpmyadmin.net/phpMyAdmin/$PHPMYADMIN_VERSION/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages.zip"
+    PHPMYADMIN_USER_PATH="/home/$PHPMYADMIN_USERNAME"
+    PHPMYADMIN_DOWNLOAD_PATH="$PHPMYADMIN_USER_PATH/phpmyadmin.zip"
+    PHPMYADMIN_EXTRACTION_PATH="$PHPMYADMIN_USER_PATH/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages"
+    PHPMYADMIN_PUBLIC_PATH="/opt/$PHPMYADMIN_USERNAME"
+
+    packages_installer unzip zip
+    echo ""
+    echo "$PHPMYADMIN_USERNAME user is needed"
+    
+    sudo adduser -q $PHPMYADMIN_USERNAME
+    
+    sudo curl -o $PHPMYADMIN_DOWNLOAD_PATH $PHPMYADMIN_DOWNLOAD_URL
+
+
+    sudo unzip -o $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
+
+    if [ -d $PHPMYADMIN_PUBLIC_PATH ] ; then 
+        echo "$PHPMYADMIN_PUBLIC_PATH already exists"
+        echo "If you continue it will be overwritten with the new instalation content"
+        confirmation_message
+        echo " deleting $PHPMYADMIN_PUBLIC_PATH"
+        rm -r $PHPMYADMIN_PUBLIC_PATH
+    fi 
+    
+    sudo mv $PHPMYADMIN_EXTRACTION_PATH $PHPMYADMIN_PUBLIC_PATH
+
+    cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
+    sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
+
+    CURRENT_PHP_VERSION=$(php -v | grep PHP)
+    CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+    PHP_FPM_PATH="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d" 
+
+    cp "templates/phpmyadmin/php/phpmyadmin.conf" "$PHP_FPM_PATH/$PHPMYADMIN_USERNAME.conf"
+
+    if ! systemctl restart  php"$CURRENT_PHP_VERSION"-fpm ; then
+        echo "The php fpm service is not starting"
+        exit
+    fi
+
+
+    echo "A domain for phpmyadmin nginx server is needed."
+    echo ""
+    echo "A nginx server unit file will be created using $PHPMYADMIN_USERNAME subdomain,"
+    echo "if your domain is 'yourdomain.com' the phpmyadmin 'server_name' directive"
+    echo "of your nginx server unit file will point to $PHPMYADMIN_USERNAME.yourdomain.com."
+    echo ""
+    echo "Please type the domain that your phpmyadmin installation will use:"
+
+    read -r PHPMYADMIN_DOMAIN
+
+    export PHPMYADMIN_DOMAIN="$PHPMYADMIN_USERNAME.$PHPMYADMIN_DOMAIN"
+    export PHPMYADMIN_PUBLIC_PATH
+
+    NGINX_AVAILABLE_SERVERS_PATH="/etc/nginx/sites-available"
+    NGINX_ENABLED_SERVERS_PATH="/etc/nginx/sites-enabled"
+
+    PHPMYADMIN_SERVER_UNIT_FILE="$NGINX_AVAILABLE_SERVERS_PATH/$PHPMYADMIN_DOMAIN"
+    PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH="$NGINX_ENABLED_SERVERS_PATH/$PHPMYADMIN_DOMAIN" 
+
+    cat "templates/phpmyadmin/nginx/server_template" | envsubst > "$PHPMYADMIN_SERVER_UNIT_FILE"
+
+    if [ -f  "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH" ]; then
+        echo "The $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link already exist"
+        echo "It must be overwritten."
+        echo "Update the $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link ?"
+        confirmation_message
+        rm -f "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+    fi
+    ln -s "$PHPMYADMIN_SERVER_UNIT_FILE" "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+
+    if ! nginx -t ; then 
+        echo ""
+        echo "Error in some of your sever uinits"
+        echo "Please correct it and run the command again"
+        exit 1
+    fi
+
+
+    echo "Restartting nginx service"
+    if ! systemctl restart nginx ; then
+        echo "It was not possible to restart nginx service"
+        exit 1
+    fi 
+    echo "Nginx Service restarted !"
+    echo "Bash phpmyadmin instalation script end"
+
+
+    
 }
 
 
 
 
-
-
-
 #-------------------Arguments Switcher-----------------------------------------#
+if [ -z "$*" ]; then 
+    echo "No argumets, you must pass at least one option or param"
+    show_help
+fi
 for i in "$@"
 do
 case $i in
     -help|--help)
-    	show_help
-    	exit $?
-    	shift # past argument=value
+        show_help
+        exit $?
+        shift # past argument=value
     ;;
     -i*|--install*)
 
     install_mariadb
     install_nginx
     install_php
-    install_extra_packages_for_laravel_dev
+    
     echo "Full batch instalation end "
-    exit
+    echo ""
+    echo ""
     shift # past arg
     ;;
     -pki=*|--package-install=*)
-    	packages_installer ${i#*=}
-    	exit $?
-    	shift # past arg
+        packages_installer "${i#*=}"
+        shift # past arg
     ;;
 
     -ng*|--nginx-install*)
 
-	    install_nginx
-	    exit $?
-	    shift # past arg
+        install_nginx
+        shift # past arg
     ;;
     -mdb*|--mariadb-install*)
 
-	    install_mariadb
-	    exit $?
-	    shift # past arg
+        install_mariadb
+        shift # past arg
     ;;
     -p=*|--php-install=*)
-	    install_php ${i#*=}
-	    exit $?
-	    shift # past arg
+        install_php "${i#*=}"
+        shift # past arg
+    ;;
+    --phpmyadmin-install*)
+        install_phpmyadmin     
+
+
+        shift # past arg
     ;;
     *)
-			echo "Invalid Argument" 
-    	show_help
-    	exit 1
+        #echo "Invalid Argument" 
+        #show_help
+        #exit 1
     ;;
-
 esac
 done
 
 
-if [ -z "$@" ]; then 
-	echo "Empty arguments are not valid"
-	show_help
-fi

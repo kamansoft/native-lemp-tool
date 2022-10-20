@@ -3,6 +3,21 @@
 
 
 
+validate_sudo(){
+	if (( $EUID != 0 )); then
+    echo "Please run as root"
+    exit 1
+	fi
+}
+
+
+user_exists(){
+	if id -u "$1" >/dev/null 2>&1; then
+	  return 0
+	else
+	  return 1
+	fi
+}
 
 confirmation_message(){
 read -p "Are you sure to contnue ? [Y/n] " -n 1 -r

@@ -1,0 +1,38 @@
+server {
+    root ${PHPMYADMIN_PUBLIC_PATH};
+    index index.php index.html index.htm index.nginx-debian.html;
+    server_name  ${PHPMYADMIN_DOMAIN};
+    client_max_body_size 100M;
+
+
+    location /index {
+            return 301 /$1;
+    }
+
+    location / {
+            try_files $uri $uri.html $uri/ @extensionless-php;
+            #try_files $uri $uri/ =404;
+    }
+
+
+    location ~ \.php$ {
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/var/run/php/phpmyadmin-fpm.sock;
+    }
+
+    location @extensionless-php {
+            rewrite ^(.*)$ $1.php last;
+    }
+
+    location ~ /\.ht {
+            deny all;
+    }
+
+    location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+        expires 30d;
+        add_header Pragma public;
+        add_header Cache-Control "public";
+    }
+
+
+}
