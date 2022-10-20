@@ -378,16 +378,30 @@ install_phpmyadmin(){
 
     cat "templates/phpmyadmin/nginx/server_template" | envsubst > "$PHPMYADMIN_SERVER_UNIT_FILE"
 
+    if [ -f  "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH" ]; then
+        echo "The $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link already exist"
+        echo "It must be overwritten."
+        echo "Update the $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link ?"
+        confirmation_message
+        rm -f "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+    fi
     ln -s "$PHPMYADMIN_SERVER_UNIT_FILE" "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
 
     if ! nginx -t ; then 
         echo ""
         echo "Error in some of your sever uinits"
-        echo "Please correc it and run the command again"
+        echo "Please correct it and run the command again"
         exit 1
     fi
 
-    systemctl restart nginx
+
+    echo "Restartting nginx service"
+    if ! systemctl restart nginx ; then
+        echo "It was not possible to restart nginx service"
+        exit 1
+    fi 
+    echo "Nginx Service restarted !"
+    echo "Bash phpmyadmin instalation script end"
 
 
     
