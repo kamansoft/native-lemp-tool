@@ -408,14 +408,9 @@ install_phpmyadmin(){
     packages_installer unzip zip
     echo ""
     echo "$PHPMYADMIN_USERNAME user is needed"
-    
     sudo adduser -q $PHPMYADMIN_USERNAME
-    
     sudo curl -o $PHPMYADMIN_DOWNLOAD_PATH $PHPMYADMIN_DOWNLOAD_URL
-
-
     sudo unzip -o $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
-
     if [ -d $PHPMYADMIN_PUBLIC_PATH ] ; then 
         echo "$PHPMYADMIN_PUBLIC_PATH already exists"
         echo "If you continue it will be overwritten with the new instalation content"
@@ -425,7 +420,6 @@ install_phpmyadmin(){
     fi 
     
     sudo mv $PHPMYADMIN_EXTRACTION_PATH $PHPMYADMIN_PUBLIC_PATH
-
     cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
     sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 

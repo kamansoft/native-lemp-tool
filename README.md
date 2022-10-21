@@ -6,7 +6,7 @@ This script is a handfull tool when you need a php enviroment (development or pr
 
 npstool is a rewrite of the the old dead [xnmp](https://github.com/lemyskaman/xnmp) bash script tool, with more reobust functionalities.
 
-This script is compatible only for debian and ubuntu is uses [sury php repos](https://deb.sury.org/) to allow you install multiple php versions on the same machine. The php installation option on this package also install commons php libraries for laravel.development, and is intend for nginx with fpm usage.
+This script is compatible only for debian and ubuntu it uses [sury php repos](https://deb.sury.org/) to allow you install multiple php versions on the same machine. The php installation option on this package also install commons php libraries for laravel development, and is intend for nginx with fpm usage.
 
 
 ### Usage
