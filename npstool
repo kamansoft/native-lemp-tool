@@ -4,58 +4,6 @@
 source scripts/deb_os_tools
 
 
-
-show_help(){
-    echo ""
-    echo "Usage:"
-    echo ""
-    echo "npstool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
-    echo ""
-    echo "Option arguments are value less, instead with param arguments you can pass"
-    echo "string values after the (=) sing."
-    echo ""
-    echo "Arguments:"
-    echo ""
-    echo " -i,   --install             Proceed to setup repo and install:"
-    echo "                             nginx + php + mariadb + extra-laravel-development" 
-    echo "                             deb packages. "
-    echo ""
-    echo " -pki= --package-install=    Install os packages."
-    echo "                             Usage example:  "
-    echo "                                 $ ./npstool -pki=htop nginx git"
-    echo ""
-    echo " -ng   --nginx-install       Install Nginx server."
-    echo ""
-    echo " -mdb  --mariadb-install     Install Mariadb version 10.6."
-    echo ""
-    echo " -p=,  --php-install=        Install a php version on system with dependencies"
-    echo "                             for laravel development, also it installs"
-    echo "                             omposer, when used the php version must be passed"
-    echo "                             as param value."
-    echo ""
-    echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
-    echo "                             It does so using fpm, so it create a php-fpm with"
-    echo "                             a os 'phpmyadmin' user, also it create an nginx server "
-    echo ""	
-#	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
-#	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
-#	echo "                             the domanin name as value for this option"
-#	echo ""
-#	echo " -ld=, --local-domain-del=   Remove a domain name entry on your hosts file."
-#	echo "                             You must pass the domain name as value for this option"
-#	echo ""
-#	echo " -fpm=, --fpm-add=           Add a new fpm file to be used."
-#	echo "                             You must pass the domain name as value for this option"
-#	echo ""
-#	echo "                                                                                   -"
-
-    return 0
-}
-
-
-
-
-
 restart_php(){
     validate_php_version "$1"
     echo "Restarting php fpm..."
@@ -268,6 +216,141 @@ install_mariadb(){
 }
 
 
+
+
+
+fpm_create(){
+    validate_sudo
+    if ! which "envsubst" ; then
+        echo ""
+        echo "envsubst command not found"
+        echo "Please install  gettext-base package"
+
+        exit 
+    fi
+
+    if [ -z "$1" ]; then 
+        echo "This script needs a user as param"
+        echo "Please run with a username as param"
+        echo "Usage example:  "
+        echo "    $ ./npstool -fpm=myusername"
+        exit
+    fi
+
+    if  ! php -v ; then
+        echo ""
+        echo "Please install php"
+    	echo "You can install it with:"
+        echo " $ ./npstool -p=<php-version>"
+        
+    	exit 1
+	fi
+
+    FPM_DESIRED_USERNAME="$1"
+
+    
+    for (( ; ; ))
+    do
+
+        
+        if id "$FPM_DESIRED_USERNAME" >/dev/null 2>&1; then
+            break
+        else
+            echo ""
+            echo ""
+            if [ "$FPM_DESIRED_USERNAME" = "root" ] ; then
+                echo "Due to potencial security issues this script will not create a fpm pool to run as root user"
+                echo "A new user can be created."
+                if not_exiting_confirmation_message ;then
+                    echo "Please type a new user name, for a php fpm to run as:"
+                    read -r FPM_DESIRED_USERNAME
+                    if adduser -q "$FPM_DESIRED_USERNAME"; then
+                        echo "New user  $FPM_DESIRED_USERNAME added"
+                    fi
+                fi
+                continue
+            fi
+            echo "User $FPM_DESIRED_USERNAME is not a valid os user"
+            echo "A new $FPM_DESIRED_USERNAME user can be created."
+            if not_exiting_confirmation_message ;then
+                if adduser -q "$FPM_DESIRED_USERNAME"; then
+                    echo "New user $FPM_DESIRED_USERNAME added"
+                    continue
+                fi
+            fi
+        fi
+        echo "Please type a valid OS user name, for a php fpm to run as:"
+        read -r FPM_DESIRED_USERNAME
+        echo ""
+    done
+
+    CURRENT_PHP_VERSION=$(php -v | grep PHP)
+    CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+    FPM_USER=$FPM_DESIRED_USERNAME
+    FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$FPM_USER.conf"
+    export DOLLAR="$"
+    export PERCENT="%"
+    export FPM_USER
+    
+    cat "templates/fpm_create/pool_template" | envsubst > "$FPM_POOL_FILE"
+
+
+
+    echo "End of Fpm Pool Creation  script"
+    
+
+}
+
+
+fpm_ng_server_create(){
+    validate_sudo
+    if ! which "envsubst" ; then
+        echo ""
+        echo "envsubst command not found"
+        echo "Please install  gettext-base package"
+
+        exit 
+    fi
+
+    if  ! nginx -v ; then
+        echo ""
+        echo "Please install Nginx server"
+    	echo "You can install it with:"
+        echo " $ ./npstool -ng"
+    	exit 1
+	fi
+
+    if  ! php -v ; then
+        echo ""
+        echo "Please install php"
+    	echo "You can install it with:"
+        echo " $ ./npstool -p=<php-version>"
+        
+    	exit 1
+	fi
+
+    CURRENT_PHP_VERSION=$(php -v | grep PHP)
+    CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+    FPM_USER=$1
+    FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$FPM_USER.conf"
+    if [[ -z "$FPM_USER" && -f "$FPM_POOL_FILE"  ]]; then 
+        echo "This script needs a username with a valid fpm pool "
+        echo "Please run with a username as param"
+        echo "Usage example:  "
+        echo "    $ ./npstool -fpm=myusername"
+        exit
+    fi
+
+
+
+
+
+}
+
+
+
+
+
 install_phpmyadmin(){
     validate_sudo
     echo ""
@@ -345,11 +428,13 @@ install_phpmyadmin(){
     cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
     sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 
-    CURRENT_PHP_VERSION=$(php -v | grep PHP)
-    CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
-    PHP_FPM_PATH="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d" 
+    #CURRENT_PHP_VERSION=$(php -v | grep PHP)
+    #CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+    #PHP_FPM_PATH="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d" 
 
-    cp "templates/phpmyadmin/php/phpmyadmin.conf" "$PHP_FPM_PATH/$PHPMYADMIN_USERNAME.conf"
+    #cp "templates/phpmyadmin/php/phpmyadmin.conf" "$PHP_FPM_PATH/$PHPMYADMIN_USERNAME.conf"
+
+    fpm_create "$PHPMYADMIN_USERNAME"
 
     if ! systemctl restart  php"$CURRENT_PHP_VERSION"-fpm ; then
         echo "The php fpm service is not starting"
@@ -378,7 +463,7 @@ install_phpmyadmin(){
     done
     
 
-    echo "Are you "
+  
 
     export PHPMYADMIN_DOMAIN="$PHPMYADMIN_USERNAME.$PHPMYADMIN_DOMAIN"
     export PHPMYADMIN_PUBLIC_PATH
@@ -424,6 +509,72 @@ install_phpmyadmin(){
 
 
 
+
+
+
+#-------------------Utility help-----------------------------------------#
+
+show_help(){
+    echo ""
+    echo "Usage:"
+    echo ""
+    echo "npstool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
+    echo ""
+    echo "Option arguments are value less, instead with param arguments you can pass"
+    echo "string values after the (=) sing."
+    echo ""
+    echo "Arguments:"
+    echo ""
+    echo " -i,              --install  Proceed to setup repo and install:"
+    echo "                             nginx + php + mariadb + extra-laravel-development" 
+    echo "                             deb packages. "
+    echo ""
+    echo " -pki=   --package-install=  Installs os packages."
+    echo "                             Usage example:  "
+    echo "                                 $ ./npstool -pki=htop nodejs git"
+    echo ""
+    echo " -ng        --nginx-install  Installs Nginx server."
+    echo ""
+    echo " -mdb     --mariadb-install  Installs Mariadb version 10.6."
+    echo ""
+    echo " -p=         --php-install=  Installs a php version on system together with "
+    echo "                             dependencies for laravel development,it also"
+    echo "                             installs composer."
+    echo "                             When used the php version must be passed"
+    echo "                             as param value."
+    echo "                             Usage example:"
+    echo "                                 $ ./npstool -p=8.0"
+    echo ""
+    echo " -fpm=    --php-fpm-create=  Creates a new php fpm pool, using a template,"
+    echo "                             it need a valid os user name as a param value."
+    echo "                             Usage example:  "
+    echo "                                 $ ./npstool -fpm=myusername"
+    echo ""
+    echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
+    echo "                             it needs a os user with a php fpm pool asingned,"
+    echo "                             it also needs the path of the public project folder."
+    echo "                             Usage example:  "
+    echo '                              $ ./npstool -lemp="myusername" "the/project/public"'
+    echo ""	
+    echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
+    echo "                             It does so using fpm, so it create a php-fpm with"
+    echo "                             a os 'phpmyadmin' user, also it create an nginx server "
+    echo ""	
+#	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
+#	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
+#	echo "                             the domanin name as value for this option"
+#	echo ""
+#	echo " -ld=, --local-domain-del=   Remove a domain name entry on your hosts file."
+#	echo "                             You must pass the domain name as value for this option"
+#	echo ""
+#	echo " -fpm=, --fpm-add=           Add a new fpm file to be used."
+#	echo "                             You must pass the domain name as value for this option"
+#	echo ""
+#	echo "                                                                                   -"
+
+    return 0
+}
+
 #-------------------Arguments Switcher-----------------------------------------#
 if [ -z "$*" ]; then 
     echo "No argumets, you must pass at least one option or param"
@@ -465,6 +616,18 @@ case $i in
     ;;
     -p=*|--php-install=*)
         install_php "${i#*=}"
+        shift # past arg
+    ;;
+    -fpm=*|--fpm-create=*)
+        fpm_create "${i#*=}"
+        shift # past arg
+    ;;
+    -lemp=*|--lemp-create=*)
+        echo  "${i#*=}"
+        for var in "$@"
+        do
+            echo "$var"
+        done
         shift # past arg
     ;;
     --phpmyadmin-install*)

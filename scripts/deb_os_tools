@@ -30,6 +30,17 @@ fi
 return 0
 }
 
+not_exiting_confirmation_message(){
+	read -p "Are you sure to contnue ? [Y/n] " -n 1 -r
+	if [[ ! $REPLY =~ ^[Yy]$ ]]
+	then
+		echo "Your reply '$REPLY' has been taken as a negative answer"
+		return 1
+	fi
+	return 0
+}
+
+
 
 
 validate_installed_repo(){
