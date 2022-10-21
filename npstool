@@ -248,30 +248,29 @@ fpm_create(){
 
     FPM_DESIRED_USERNAME="$1"
 
-    
+
+
     for (( ; ; ))
     do
 
+        if [ "$FPM_DESIRED_USERNAME" = "root" ] ; then
+            echo "Due to potencial security issues this script will not create a fpm pool to run as root user"
+            FPM_DESIRED_USERNAME=""
+        fi
+        if [ -z $FPM_DESIRED_USERNAME ];then
+            echo "Please type a valid OS user name, for a php fpm to run as:"
+            read -r FPM_DESIRED_USERNAME
+            echo ""
+            continue
+        fi 
         
         if id "$FPM_DESIRED_USERNAME" >/dev/null 2>&1; then
             break
         else
             echo ""
             echo ""
-            if [ "$FPM_DESIRED_USERNAME" = "root" ] ; then
-                echo "Due to potencial security issues this script will not create a fpm pool to run as root user"
-                echo "A new user can be created."
-                if not_exiting_confirmation_message ;then
-                    echo "Please type a new user name, for a php fpm to run as:"
-                    read -r FPM_DESIRED_USERNAME
-                    if adduser -q "$FPM_DESIRED_USERNAME"; then
-                        echo "New user  $FPM_DESIRED_USERNAME added"
-                    fi
-                fi
-                continue
-            fi
-            echo "User $FPM_DESIRED_USERNAME is not a valid os user"
-            echo "A new $FPM_DESIRED_USERNAME user can be created."
+            echo "User $FPM_DESIRED_USERNAME is not valid."
+            echo "A new user $FPM_DESIRED_USERNAME can be created."
             if not_exiting_confirmation_message ;then
                 if adduser -q "$FPM_DESIRED_USERNAME"; then
                     echo "New user $FPM_DESIRED_USERNAME added"
@@ -292,10 +291,12 @@ fpm_create(){
     export PERCENT="%"
     export FPM_USER
     
-    cat "templates/fpm_create/pool_template" | envsubst > "$FPM_POOL_FILE"
+    if ! cat "templates/fpm_create/pool_template" | envsubst > "$FPM_POOL_FILE";then
+        echo "Error on php fpm pool creation"
+        exit
+    fi
 
-
-
+    echo "php fpm pool succesfully created"
     echo "End of Fpm Pool Creation  script"
     
 
@@ -550,12 +551,12 @@ show_help(){
     echo "                             Usage example:  "
     echo "                                 $ ./npstool -fpm=myusername"
     echo ""
-    echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
-    echo "                             it needs a os user with a php fpm pool asingned,"
-    echo "                             it also needs the path of the public project folder."
-    echo "                             Usage example:  "
-    echo '                              $ ./npstool -lemp="myusername" "the/project/public"'
-    echo ""	
+#    echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
+#    echo "                             it needs a os user with a php fpm pool asingned,"
+#    echo "                             it also needs the path of the public project folder."
+#    echo "                             Usage example:  "
+#    echo '                              $ ./npstool -lemp="myusername" "the/project/public"'
+#    echo ""	
     echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
     echo "                             It does so using fpm, so it create a php-fpm with"
     echo "                             a os 'phpmyadmin' user, also it create an nginx server "
@@ -622,14 +623,14 @@ case $i in
         fpm_create "${i#*=}"
         shift # past arg
     ;;
-    -lemp=*|--lemp-create=*)
-        echo  "${i#*=}"
-        for var in "$@"
-        do
-            echo "$var"
-        done
-        shift # past arg
-    ;;
+#    -lemp=*|--lemp-create=*)
+#        echo  "${i#*=}"
+#        for var in "$@"
+#        do
+#            echo "$var"
+#        done
+#        shift # past arg
+#   ;;
     --phpmyadmin-install*)
         install_phpmyadmin     
 
