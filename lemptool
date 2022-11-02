@@ -1,0 +1,140 @@
+#! /bin/bash
+
+source lemptool_scripts
+
+#-------------------Utility help-----------------------------------------#
+
+show_help() {
+  echo ""
+  echo "Usage:"
+  echo ""
+  echo "lemptool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
+  echo ""
+  echo "Option arguments are value less, instead with param arguments you can pass"
+  echo "string values after the (=) sing."
+  echo ""
+  echo "Arguments:"
+  echo ""
+  echo " -i,              --install  Proceed to setup repo and install:"
+  echo "                             nginx + php + mariadb + extra-laravel-development"
+  echo "                             deb packages. "
+  echo ""
+  echo " -pki=   --package-install=  Installs os packages."
+  echo "                             Usage example:  "
+  echo "                                 $ ./lemptool -pki=htop nodejs git"
+  echo ""
+  echo " -ng        --nginx-install  Installs Nginx server."
+  echo ""
+  echo " -mdb     --mariadb-install  Installs Mariadb version 10.6."
+  echo ""
+  echo " -p=         --php-install=  Installs a php version on system together with "
+  echo "                             dependencies for laravel development,it also"
+  echo "                             installs composer."
+  echo "                             When used the php version must be passed"
+  echo "                             as param value."
+  echo "                             Usage example:"
+  echo "                                 $ ./lemptool -p=8.0"
+  echo ""
+  echo " -fpm=    --php-fpm-create=  Creates a new php fpm pool, using a template,"
+  echo "                             it need a valid os user name as a param value."
+  echo "                             Usage example:  "
+  echo "                                 $ ./lemptool -fpm=myusername"
+  echo ""
+  #    echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
+  #    echo "                             it needs a os user with a php fpm pool asingned,"
+  #    echo "                             it also needs the path of the public project folder."
+  #    echo "                             Usage example:  "
+  #    echo '                              $ ./lemptool -lemp="myusername" "the/project/public"'
+  #    echo ""
+  echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
+  echo "                             It does so using fpm, so it create a php-fpm with"
+  echo "                             a os 'phpmyadmin' user, also it create an nginx server "
+  echo ""
+  #	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
+  #	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
+  #	echo "                             the domanin name as value for this option"
+  #	echo ""
+  #	echo " -ld=, --local-domain-del=   Remove a domain name entry on your hosts file."
+  #	echo "                             You must pass the domain name as value for this option"
+  #	echo ""
+  #	echo " -fpm=, --fpm-add=           Add a new fpm file to be used."
+  #	echo "                             You must pass the domain name as value for this option"
+  #	echo ""
+  #	echo "                                                                                   -"
+
+  return 0
+}
+
+#-------------------Arguments Switcher-----------------------------------------#
+if [ -z "$*" ]; then
+  echo "No arguments, you must pass at least one option or param"
+  show_help
+fi
+for i in "$@"; do
+  case $i in
+  -help | --help)
+    show_help
+    exit $?
+    shift # past argument=value
+    ;;
+  -i* | --install*)
+
+    install_mariadb
+    install_nginx
+    install_php
+
+    echo "Full batch instalation end "
+    echo ""
+    echo ""
+    shift # past arg
+    ;;
+  -pki=* | --package-install=*)
+    packages_installer "${i#*=}"
+    shift # past arg
+    ;;
+
+  -ng* | --nginx-install*)
+
+    install_nginx
+    shift # past arg
+    ;;
+  -mdb* | --mariadb-install*)
+
+    install_mariadb
+    shift # past arg
+    ;;
+  -dbu* | --add-mariadb-user*)
+
+    install_mariadb
+    shift # past arg
+    ;;
+  -p=* | --php-install=*)
+    install_php "${i#*=}"
+    shift # past arg
+    ;;
+  -fpm=* | --fpm-create=*)
+    fpm_create "${i#*=}"
+    shift # past arg
+    ;;
+  -lemp=*|--lemp-create=*)
+    ng_fpm_server_create "${i#*=}"
+    #        echo  "${i#*=}"
+    #        for var in "$@"
+    #        do
+    #            echo "$var"
+    #        done
+    shift # past arg
+    ;;
+  --phpmyadmin-install*)
+    install_phpmyadmin
+
+    shift # past arg
+    ;;
+
+  *)
+    #echo "Invalid Argument"
+    #show_help
+    #exit 1
+    ;;
+  esac
+done

@@ -81,8 +81,8 @@ validate_distro_name(){
 	      echo "Valid distro names are:"
 	      for name in "$@"; do echo "$name"; done
 	      echo ""
-	      read -p "Please type one of the names from the above list to select it: " CURRENT_DISTRO_NAME
-	      validate_distro_name $@
+	      read -p -r "Please type one of the names from the above list to select it: " CURRENT_DISTRO_NAME
+	      validate_distro_name "$@"
 
 	else
 		echo ""
@@ -117,7 +117,8 @@ validate_distro_version(){
 	      for version in "$@"; do echo "$version"; done
 	      echo ""
 	      read -p "Please type one of the versions from the above list to select it: " CURRENT_DISTRO_VERSION
-	      validate_distro_version $@
+	      validate_distro_version "$@"
+
 
 	else
 		echo ""
@@ -131,30 +132,32 @@ validate_distro_version(){
 
 
 packages_installer(){
-validate_sudo
-CONFIRMATION=1
-PACKAGES=""
-for package in $@; do
-	if [ $package == "-y" ];then
-		CONFIRMATION=0
-	else
-		PACKAGES="$PACKAGES  $package"
-	fi
-done
+  validate_sudo
+  CONFIRMATION=1
+  PACKAGES=""
+  # shellcheck disable=SC2068
+  for package in $@; do
+    if [ "$package" == "-y" ];then
+      CONFIRMATION=0
+    else
+      PACKAGES="$PACKAGES  $package"
+    fi
+  done
 
 
-if [ $CONFIRMATION == 1 ];then
-	echo "This script will install the next packages:"
-	for package in $@; do
-		echo " $package"
-	done
-	confirmation_message
-	sudo apt install $@
-	return $?
-else 
-	sudo apt install -y $@
-	return $?
-fi
+  if [ $CONFIRMATION == 1 ];then
+    echo "This script will install the next packages:"
+    # shellcheck disable=SC2068
+    for package in $@; do
+      echo " $package"
+    done
+    confirmation_message
+    sudo apt install "$@"
+    return $?
+  else
+    sudo apt install -y "$@"
+    return $?
+  fi
 
 
 }

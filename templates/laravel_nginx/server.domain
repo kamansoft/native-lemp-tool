@@ -1,0 +1,73 @@
+server {
+        root ${SERVER_ROOT};
+        index index.php index.html;
+        server_name ${SERVER_DOMAIN} ;
+	client_max_body_size 25m;
+
+		add_header X-Frame-Options "SAMEORIGIN";
+		add_header X-XSS-Protection "1; mode=block";
+		add_header X-Content-Type-Options "nosniff";
+
+		charset utf-8;
+
+#        if ($request_uri ~ ^/([^/]+)\.php$) {
+#             return 301 /$1;
+#        }
+
+
+	location /storage/ {
+                if ($request_method = 'GET') {
+                    add_header 'Access-Control-Allow-Origin' '*' always;
+                    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+                    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+                    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+                }
+
+
+	}
+
+        location / {
+		autoindex on;
+                #try_files $uri $uri.html $uri/ @extensionless-php;
+                #try_files $uri $uri/ =404;
+		#try_files $uri $uri/ /index.php?m=$request_uri;
+		try_files $uri $uri/ /index.php?$query_string;
+
+        }
+
+
+
+	location = /favicon.ico { access_log off; log_not_found off; }
+	location = /robots.txt  { access_log off; log_not_found off; }
+
+	error_page 404 /index.php;
+
+        location ~ \.php$ {
+                include snippets/fastcgi-php.conf;
+                fastcgi_pass unix:/var/run/php/${SERVER_FPM}-fpm.sock;
+				fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+				include fastcgi_params;
+        }
+
+        location @extensionless-php {
+                rewrite ^(.*)$ $1.php last;
+        }
+
+        location ~ /\.ht {
+                deny all;
+        }
+
+ #       location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+ #           expires 30d;
+ #           add_header Pragma public;
+ #           add_header Cache-Control "public";
+ #       }
+
+
+
+
+
+
+
+
+}
