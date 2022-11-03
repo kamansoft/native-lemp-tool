@@ -8,7 +8,7 @@ show_help() {
   echo ""
   echo "Usage:"
   echo ""
-  echo "lemptool [--option1 --option2 ...] [--param1=value1 --param2=value2 ...]"
+  echo "lemptool [--option1 --option2 ...] [--param1=value1_2 value2_2 --param2=value2_1  ...]"
   echo ""
   echo "Option arguments are value less, instead with param arguments you can pass"
   echo "string values after the (=) sing."
@@ -65,30 +65,32 @@ show_help() {
   return 0
 }
 
-#-------------------Arguments Switcher-----------------------------------------#
-
-
+#-------------------Arguments Handling-----------------------------------------#
 
 clear_state() {
   CURRENT_SCRIPT=""
   SCRIPT_ARGUMENTS=""
-  LAST_SCRIPT=""
+}
+
+run_current_script(){
+
+  $CURRENT_SCRIPT $SCRIPT_ARGUMENTS
+}
+
+add_argument(){
+  SCRIPT_ARGUMENTS="$SCRIPT_ARGUMENTS  $1"
 }
 
 add_script() {
 
-    if [  -z "$LAST_SCRIPT" ]; then
-      CURRENT_SCRIPT="$1"gg
-    else
-      $LAST_SCRIPT "$LAST_ARGUMENTS"
-      LAST_SCRIPT=""
+    if [ -n "$CURRENT_SCRIPT" ]; then
+      run_current_script
+      SCRIPT_ARGUMENTS=""
     fi
-
-  LAST_SCRIPT="$CURRENT_SCRIPT"
-  LAST_ARGUMENTS="$CURRENT_ARGUMENTS"
-  CURRENT_SCRIPT="$1"
-  CURRENT_ARGUMENTS="$2"
+    CURRENT_SCRIPT="$1"
 }
+
+
 
 
 
@@ -118,37 +120,37 @@ for i in "$@"; do
     shift # past arg
     ;;
   -pki=* | --package-install=*)
-    packages_installer "${i#*=}"
+    add_script "packages_installer"
+    add_argument "${i#*=}"
     shift # past arg
     ;;
 
   -ng* | --nginx-install*)
-
-    install_nginx
+    add_script "install_nginx"
+    add_argument "${i#*=}"
     shift # past arg
     ;;
   -mdb* | --mariadb-install*)
+    add_script "install_mariadb"
+    add_argument "${i#*=}"
 
-    install_mariadb
     shift # past arg
     ;;
-  -dbu* | --add-mariadb-user*)
+  -dbu=* | --add-mariadb-user=*)
+    add_script "add_mdb_user_with_db"
+    add_argument "${i#*=}"
 
-    install_mariadb
     shift # past arg
     ;;
   -p=* | --php-install=*)
-
     add_script "install_php"
-    SCRIPT_ARGUMENTS+="${i#*=}"
-    #install_php "${i#*=}"
-
-    echo "${i#*=}"
-
+    add_argument "${i#*=}"
     shift # past arg
     ;;
   -fpm=* | --fpm-create=*)
-    fpm_create "${i#*=}"
+
+    add_script "fpm_create"
+    add_argument "${i#*=}"
     shift # past arg
     ;;
   -lemp=*|--lemp-create=*)
@@ -167,10 +169,9 @@ for i in "$@"; do
     ;;
 
   *)
-    SCRIPT_ARGUMENTS+="${i#*}"
-    #echo "Invalid Argument"
-    #show_help
-    #exit 1
+    add_argument "${i#*}"
+
     ;;
   esac
 done
+run_current_script

@@ -3,11 +3,42 @@
 # shellcheck source=scripts/deb_os_tools
 source scripts/deb_os_tools
 
+
+
 restart_php() {
   validate_php_version "$1"
   echo "Restarting php fpm..."
   sudo systemctl restart php"$PHP_VERSION"-fpm
 }
+
+validate_mariadb(){
+  if ! command -v mysql &> /dev/null; then
+    echo "Mariadb is not installed, please install it first."
+    echo "You can install it with:"
+    echo " $ ./lemptool -mdb"
+    exit 1
+  fi
+}
+
+validate_php(){
+  if ! command -v php &> /dev/null; then
+    echo "PHP is not installed, please install it first."
+    echo "You can install it with:"
+    echo " $ ./lemptool -p=<php-version>"
+    exit 1
+  fi
+}
+
+validate_nginx(){
+  if ! command -v nginx &> /dev/null; then
+    echo "Nginx is not installed, please install it first."
+    echo "You can install it with:"
+    echo " $ ./lemptool -ng"
+    exit 1
+  fi
+}
+
+
 
 install_extra_packages_for_laravel_dev() {
 
@@ -368,33 +399,9 @@ fpm_ng_server_create() {
 install_phpmyadmin() {
   validate_sudo
   echo ""
-  if ! php -v; then
-    echo ""
-    echo "Please install php"
-    echo "You can install it with:"
-    echo " $ ./lemptool -p=<php-version>"
-
-    exit 1
-  fi
-
-  echo ""
-  if ! nginx -v; then
-    echo ""
-    echo "Please install Nginx server"
-    echo "You can install it with:"
-    echo " $ ./lemptool -ng"
-    exit 1
-  fi
-
-  echo ""
-  if ! mysql -V; then
-    echo ""
-    echo "Please install Mariadb or mysql"
-    echo "You can install it with:"
-    echo " $ ./lemptool -mdb"
-
-    exit 1
-  fi
+  validate_php
+  validate_mariadb
+  validate_nginx
   echo ""
   if ! which "envsubst"; then
     echo ""
@@ -492,12 +499,53 @@ install_phpmyadmin() {
     exit 1
   fi
 
-  echo "Restartting nginx service"
+  echo "Restarting nginx service"
   if ! systemctl restart nginx; then
     echo "It was not possible to restart nginx service"
     exit 1
   fi
   echo "Nginx Service restarted !"
-  echo "Bash phpmyadmin instalation script end"
+  echo "Bash phpmyadmin installation script end"
+
+}
+
+
+add_mdb_user_with_db(){
+
+  validate_sudo
+  validate_mariadb
+
+
+  MDB_USERNAME=""
+  MDB_PASSWORD=""
+  if [ -z "$1" ]; then
+    echo "Please type the username to add"
+    read -r MDB_USERNAME
+  else
+    MDB_USERNAME="$1"
+  fi
+
+  if [ -z "$2" ]; then
+    echo "Please type the password for $MDB_USERNAME"
+    read -r MDB_PASSWORD
+  else
+    MDB_PASSWORD="$2"
+  fi
+
+  echo "CREATE USER '$MDB_USERNAME'@'%' IDENTIFIED  BY '$MDB_PASSWORD';GRANT USAGE ON *.* TO '$MDB_USERNAME'@'%' REQUIRE NONE WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;CREATE DATABASE IF NOT EXISTS $MDB_USERNAME; GRANT ALL PRIVILEGES ON $MDB_USERNAME.* TO '$MDB_USERNAME'@'%';
+
+"
+
+
+
+
+
+
+
+
+
+  
+
+
 
 }
