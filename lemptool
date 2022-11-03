@@ -66,13 +66,42 @@ show_help() {
 }
 
 #-------------------Arguments Switcher-----------------------------------------#
+
+
+
+clear_state() {
+  CURRENT_SCRIPT=""
+  SCRIPT_ARGUMENTS=""
+  LAST_SCRIPT=""
+}
+
+add_script() {
+
+    if [  -z "$LAST_SCRIPT" ]; then
+      CURRENT_SCRIPT="$1"gg
+    else
+      $LAST_SCRIPT "$LAST_ARGUMENTS"
+      LAST_SCRIPT=""
+    fi
+
+  LAST_SCRIPT="$CURRENT_SCRIPT"
+  LAST_ARGUMENTS="$CURRENT_ARGUMENTS"
+  CURRENT_SCRIPT="$1"
+  CURRENT_ARGUMENTS="$2"
+}
+
+
+
+
 if [ -z "$*" ]; then
   echo "No arguments, you must pass at least one option or param"
   show_help
 fi
+clear_state
 for i in "$@"; do
   case $i in
   -help | --help)
+    clear_state
     show_help
     exit $?
     shift # past argument=value
@@ -109,7 +138,13 @@ for i in "$@"; do
     shift # past arg
     ;;
   -p=* | --php-install=*)
-    install_php "${i#*=}"
+
+    add_script "install_php"
+    SCRIPT_ARGUMENTS+="${i#*=}"
+    #install_php "${i#*=}"
+
+    echo "${i#*=}"
+
     shift # past arg
     ;;
   -fpm=* | --fpm-create=*)
@@ -132,6 +167,7 @@ for i in "$@"; do
     ;;
 
   *)
+    SCRIPT_ARGUMENTS+="${i#*}"
     #echo "Invalid Argument"
     #show_help
     #exit 1
