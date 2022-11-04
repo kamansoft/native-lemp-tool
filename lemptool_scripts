@@ -74,24 +74,44 @@ validate_php_version() {
   export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
 }
 
+
+#---------------PHP INSTALL-------------------
 install_php() {
+  show_confirmations=1
+  if  ! check_for_y "$@"; then
+    show_confirmations=0
+  fi
+
   validate_sudo
-
   validate_php_version "$1"
-
-  echo "If not setted, this script will install the deb.sury.org php repo."
+  echo "> message:"
+  echo "If not set, this script will install the deb.sury.org php repo."
   echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+
+  if [ $show_confirmations -eq 1 ]; then
+    confirmation_message
+  else
+    echo "> message:"
+    echo "Confirmation avoided !"
+  fi 
   install_deb_repo_packages
   validate_distro_name "Ubuntu" "Debian"
 
   if [[ $CURRENT_DISTRO_NAME == Ubuntu ]]; then
     PPA_UBUNTU_REPO="ondrej/php"
-    validate_installed_repo $PPA_UBUNTU_REPO
-    if [[ "$?" -eq 1 ]]; then
+    
+    if ! validate_installed_repo $PPA_UBUNTU_REPO; then
+      echo "> message:"
       echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
       echo "Adding $PPA_UBUNTU_REPO ppa repository"
-      sudo add-apt-repository ppa:ondrej/php
+      if [ $show_confirmations -eq 1 ]; then
+        sudo add-apt-repository ppa:ondrej/php
+      else
+        sudo add-apt-repository ppa:ondrej/php -y
+      fi
+
     else
+      echo "> message:"
       echo "The $PPA_UBUNTU_REPO repository is already installed."
 
     fi
@@ -99,7 +119,8 @@ install_php() {
   if [[ $CURRENT_DISTRO_NAME == Debian ]]; then
     DEBIAN_REPO="https://packages.sury.org/php/ $(lsb_release -sc) main"
     validate_installed_repo "$DEBIAN_REPO"
-    if [[ "$?" -eq 1 ]]; then
+    if ! validate_installed_repo "$DEBIAN_REPO"; then
+      echo "> message:"
       echo "Adding the $DEBIAN_REPO repository"
       GPG_URL=https://packages.sury.org/php/apt.gpg
       GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
@@ -108,29 +129,41 @@ install_php() {
       curl -fsSL "$GPG_URL" | sudo gpg --dearmor -o $GPG_KEY_PATH
 
     else
-      echo "sury Nginx mainline repo already installed "
+      echo "> message:"
+      echo "Sury Nginx mainline repo already installed "
     fi
   fi
   sudo apt update
+  echo "> message:"
   echo "Installing php fpm and related packages"
-  PHP_PACKAGES="-y php$PHP_VERSION php$PHP_VERSION-fpm php$PHP_VERSION-sqlite3 php$PHP_VERSION-mysql php$PHP_VERSION-xml php$PHP_VERSION-xmlrpc php$PHP_VERSION-curl php$PHP_VERSION-gd php$PHP_VERSION-imagick php$PHP_VERSION-cli php$PHP_VERSION-dev php$PHP_VERSION-imap php$PHP_VERSION-mbstring php$PHP_VERSION-opcache php$PHP_VERSION-soap php$PHP_VERSION-zip php$PHP_VERSION-intl php$PHP_VERSION-bcmath php$PHP_VERSION-bz2 php$PHP_VERSION-xdebug php$PHP_VERSION-ctype php$PHP_VERSION-gmp php$PHP_VERSION-bcmath php$PHP_VERSION-dev php$PHP_VERSION"
+  PHP_PACKAGES="-y php$PHP_VERSION php$PHP_VERSION-fpm php$PHP_VERSION-sqlite3 php$PHP_VERSION-mysql php$PHP_VERSION-xml php$PHP_VERSION-xmlrpc php$PHP_VERSION-curl php$PHP_VERSION-gd php$PHP_VERSION-imagick php$PHP_VERSION-cli php$PHP_VERSION-dev php$PHP_VERSION-imap php$PHP_VERSION-mbstring php$PHP_VERSION-opcache php$PHP_VERSION-soap php$PHP_VERSION-zip php$PHP_VERSION-intl php$PHP_VERSION-bcmath php$PHP_VERSION-bz2 php$PHP_VERSION-xdebug php$PHP_VERSION-ctype php$PHP_VERSION-gmp php$PHP_VERSION-bcmath php$PHP_VERSION-dev"
   if packages_installer "$PHP_PACKAGES"; then
+    echo "> message:"
+    echo "PHP INSTALLED WITH SUCCESS"
+    echo "> message:"
     echo "Composer will be installed"
-    confirmation_message
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+    else
+      echo "> message:"
+      echo "Confirmation avoided !"
+    fi
     wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
     sudo mv composer.phar /usr/local/bin/composer
     install_extra_packages_for_laravel_dev
+
   fi
+
+    echo "> message:"
+    echo "PHP INSTALL SCRIPT END"
 
 }
 
 
 #---------------NGINX INSTALL-------------------
-
-
 install_nginx() {
   show_confirmations=1
-  if  ! check_for_y $@; then 
+  if  ! check_for_y "$@"; then
     show_confirmations=0
   fi
 
@@ -173,8 +206,8 @@ install_nginx() {
   if [[ $CURRENT_DISTRO_NAME == Debian ]]; then
 
     DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
-    validate_installed_repo "$DEBIAN_REPO"
-    if [[ "$?" -eq 1 ]]; then
+    
+    if ! validate_installed_repo "$DEBIAN_REPO"; then
       echo "> message:"
       echo "Adding the $DEBIAN_REPO repository"
 
@@ -202,11 +235,10 @@ install_nginx() {
 
 
 #---------------MARIADB INSTALL-------------------
-
 install_mariadb() {
 
   show_confirmations=1
-  if  ! check_for_y $@; then 
+  if  ! check_for_y "$@"; then
     show_confirmations=0
   fi
 
@@ -236,7 +268,7 @@ install_mariadb() {
   if ! validate_installed_repo "$BASE_MARIADB_REPO_URL"; then
     echo ""
     echo "> message:"
-    echo "Official MariaDB repositeries where NOT found..."
+    echo "Official MariaDB repositories where NOT found..."
 
     MARIA_DB_REPO=""
     if [[ $CURRENT_DISTRO_NAME == Ubuntu ]]; then

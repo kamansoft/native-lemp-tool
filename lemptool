@@ -113,13 +113,10 @@ for i in "$@"; do
     ;;
   -i* | --install*)
 
-    install_mariadb
-    install_nginx
-    install_php
+    install_mariadb -y
+    install_nginx -y
+    install_php 8.1 -y
 
-    echo "Full batch instalation end "
-    echo ""
-    echo ""
     shift # past arg
     ;;
   -pki=* | --package-install=*)

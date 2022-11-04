@@ -145,6 +145,7 @@ packages_installer(){
   PACKAGES=""
   # shellcheck disable=SC2068
   for package in $@; do
+
     if [ "$package" == "-y" ];then
       CONFIRMATION=0
     else
@@ -156,14 +157,14 @@ packages_installer(){
   if [ $CONFIRMATION == 1 ];then
     echo "This script will install the next packages:"
     # shellcheck disable=SC2068
-    for package in $@; do
-      echo " $package"
+    for package in $PACKAGES; do
+      echo "$package"
     done
     confirmation_message
-    sudo apt install "$@"
+    sudo apt install $PACKAGES
     return $?
   else
-    sudo apt install -y "$@"
+    sudo apt install -y $PACKAGES
     return $?
   fi
 
