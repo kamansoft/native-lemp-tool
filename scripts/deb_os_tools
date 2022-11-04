@@ -9,6 +9,15 @@ validate_sudo(){
     exit 1
 	fi
 }
+validate_envsubst(){
+  if ! which "envsubst"; then
+    echo ""
+    echo "envsubst command not found"
+    echo "For deb based distros it can be install with:"
+    echo " $ sudo apt install  gettext-base package"
+    exit
+  fi
+}
 
 
 user_exists(){
@@ -32,9 +41,7 @@ confirmation_message(){
 }
 
 not_exiting_confirmation_message(){
-  if ACCEPT_ALL; then
-    return 0
-  fi
+
 	read -p "Are you sure to contnue ? [Y/n] " -n 1 -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]
 	then

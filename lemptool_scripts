@@ -305,22 +305,9 @@ install_mariadb() {
 
 fpm_create() {
   validate_sudo
-  if ! which "envsubst"; then
-    echo ""
-    echo "envsubst command not found"
-    echo "Please install  gettext-base package"
 
-    exit
-  fi
-
-  if ! php -v; then
-    echo ""
-    echo "Please install php"
-    echo "You can install it with:"
-    echo " $ ./lemptool -p=<php-version>"
-
-    exit 1
-  fi
+  validate_envsubst
+  validate_php
 
   if [ -z "$1" ]; then
     echo "This script needs a user as param"
@@ -352,6 +339,7 @@ fpm_create() {
       echo ""
       echo "User $FPM_DESIRED_USERNAME is not valid."
       echo "A new user $FPM_DESIRED_USERNAME can be created."
+      
       if not_exiting_confirmation_message; then
         if adduser -q "$FPM_DESIRED_USERNAME"; then
           echo "New user $FPM_DESIRED_USERNAME added"
@@ -372,7 +360,7 @@ fpm_create() {
   export PERCENT="%"
   export FPM_USER
 
-  if ! cat "templates/fpm_create/pool_template" | envsubst >"$FPM_POOL_FILE"; then
+  if !  envsubst < "templates/fpm_create/pool_template" > "$FPM_POOL_FILE"; then
     echo "Error on php fpm pool creation"
     exit
   fi
