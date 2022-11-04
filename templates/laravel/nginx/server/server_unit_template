@@ -1,0 +1,73 @@
+server {
+        root ${NG_SERVER_PATH};
+        index index.php index.html;
+        server_name ${NG_SERVER_DOMAIN} ;
+        client_max_body_size 25m;
+
+                add_header X-Frame-Options "SAMEORIGIN";
+                add_header X-XSS-Protection "1; mode=block";
+                add_header X-Content-Type-Options "nosniff";
+
+                charset utf-8;
+
+#        if (${DOLLAR}request_uri ~ ^/([^/]+)\.php${DOLLAR}) {
+#             return 301 /${DOLLAR}1;
+#        }
+
+
+        location /storage/ {
+                if (${DOLLAR}request_method = 'GET') {
+                    add_header 'Access-Control-Allow-Origin' '*' always;
+                    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+                    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range' always;
+                    add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+                }
+
+
+        }
+
+        location / {
+                autoindex on;
+                #try_files ${DOLLAR}uri ${DOLLAR}uri.html ${DOLLAR}uri/ @extensionless-php;
+                #try_files ${DOLLAR}uri ${DOLLAR}uri/ =404;
+                #try_files ${DOLLAR}uri ${DOLLAR}uri/ /index.php?m=${DOLLAR}request_uri;
+                try_files ${DOLLAR}uri ${DOLLAR}uri/ /index.php?${DOLLAR}query_string;
+
+        }
+
+
+
+        location = /favicon.ico { access_log off; log_not_found off; }
+        location = /robots.txt  { access_log off; log_not_found off; }
+
+        error_page 404 /index.php;
+
+        location ~ \.php${DOLLAR} {
+                include snippets/fastcgi-php.conf;
+                fastcgi_pass unix:/var/run/php/${NG_SERVER_FPM_NAME}-fpm.sock;
+                                fastcgi_param SCRIPT_FILENAME ${DOLLAR}realpath_root${DOLLAR}fastcgi_script_name;
+                                include fastcgi_params;
+        }
+
+        location @extensionless-php {
+                rewrite ^(.*)${DOLLAR} ${DOLLAR}1.php last;
+        }
+
+        location ~ /\.ht {
+                deny all;
+        }
+
+ #       location ~* \.(?:ico|css|js|gif|jpe?g|png)${DOLLAR} {
+ #           expires 30d;
+ #           add_header Pragma public;
+ #           add_header Cache-Control "public";
+ #       }
+
+
+
+
+
+
+
+
+}

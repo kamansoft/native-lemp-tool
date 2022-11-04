@@ -304,6 +304,10 @@ install_mariadb() {
 }
 
 fpm_create() {
+  show_confirmations=1
+  if  ! check_for_y "$@"; then
+    show_confirmations=0
+  fi
   validate_sudo
 
   validate_envsubst
@@ -339,13 +343,23 @@ fpm_create() {
       echo ""
       echo "User $FPM_DESIRED_USERNAME is not valid."
       echo "A new user $FPM_DESIRED_USERNAME can be created."
-      
-      if not_exiting_confirmation_message; then
+
+      if [ $show_confirmations -eq 1 ]; then
+        if not_exiting_confirmation_message; then
+          if adduser -q "$FPM_DESIRED_USERNAME"; then
+            echo "New user $FPM_DESIRED_USERNAME added"
+            continue
+          fi
+        fi
+      else
+        echo "> message:"
+        echo "Confirmation avoided !"
         if adduser -q "$FPM_DESIRED_USERNAME"; then
           echo "New user $FPM_DESIRED_USERNAME added"
           continue
         fi
       fi
+
     fi
     echo "Please type a valid OS user name, for a php fpm to run as:"
     read -r FPM_DESIRED_USERNAME
@@ -365,107 +379,110 @@ fpm_create() {
     exit
   fi
 
-  echo "php fpm pool succesfully created"
+  echo "php fpm pool successfully created"
   echo "End of Fpm Pool Creation  script"
 
 }
 
-ng_fpm_server_create(){
+
+
+
+fpm_ng_server_create(){
+  show_confirmations=1
+  if  ! check_for_y "$@"; then
+    show_confirmations=0
+  fi
   validate_sudo
+  validate_envsubst
+  validate_php
+  validate_nginx
 
-  if ! which "envsubst"; then
-    echo ""
-    echo "envsubst command not found"
-    echo "Please install  gettext-base package"
+  NG_SERVER_PATH=$3
+  NG_SERVER_DOMAIN=$2
+  NG_SERVER_FPM_NAME=$1
 
-    exit
+  if [ -z "$NG_SERVER_PATH" ]; then
+    echo "This script needs a path to serve with a nginx server"
+    echo "Please type a path to serve with a nginx server"
+    read -r NG_SERVER_PATH
+  fi
+  if [ ! -d "$NG_SERVER_PATH" ];then
+      echo "$NG_SERVER_PATH directory does not exist."
+      exit 1
   fi
 
-  if ! php -v; then
-    echo ""
-    echo "Please install php"
-    echo "You can install it with:"
-    echo " $ ./lemptool -p=<php-version>"
-
-    exit 1
+  if [ -z "$NG_SERVER_DOMAIN" ]; then
+    echo "This script needs a domain to configure nginx sever"
+    echo "Please type a domainr"
+    read -r NG_SERVER_DOMAIN
   fi
 
-  if ! which "nginx"; then
-    echo ""
-    echo "Please install nginx"
-    echo "You can install it with:"
-    echo " $ ./lemptool -n"
 
-    exit 1
+  CURRENT_PHP_VERSION=$(php -v | grep PHP)
+  CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+
+
+  if [ -z "$NG_SERVER_FPM_NAME" ]; then
+    echo "This script needs a valid fpm name to configure with"
+    echo "Please type a fpm name"
+    read -r $NG_SERVER_FPM_NAME
   fi
 
-  NG_SERVER_TEMPLATE_FILE="templates/laravel_nginx/server.domain"
-  if [ -z "$1" ]; then
-    echo ""
-    echo "---DEFAULT NGINX SERVER TEMPLATE ------"
-    echo ""
-    cat $NG_SERVER_TEMPLATE_FILE
-    echo ""
-    echo "---END DEFAULT NGINX SERVER TEMPLATE --"
-    echo ""
-    echo "This script expect a nginx  server template file path as param"
-    echo "No param was given. "
-    echo "Continue using above default template?"
-    if not_exiting_confirmation_message; then
-      echo "Using above default template"
+
+
+
+  FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$NG_SERVER_FPM_NAME.conf"
+
+  if [ ! -f "$FPM_POOL_FILE" ]; then
+    echo "> message:"
+    echo "Fpm pool file $FPM_POOL_FILE does not exist"
+    echo "A new fpm user and file can be created"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+      fpm_create $NG_SERVER_FPM_NAME
     else
-      read -p "Please type a path for a nginx server template file: " NG_SERVER_TEMPLATE_FILE
-      if [ ! -f "$NG_SERVER_TEMPLATE_FILE" ]; then
-        echo "File $NG_SERVER_TEMPLATE_FILE does not exist"
-        exit 1
-      fi
+      echo "> message:"
+      echo "Confirmation avoided !"
+      fpm_create $NG_SERVER_FPM_NAME -y
     fi
 
   fi
 
-}
-
-fpm_ng_server_create() {
-  validate_sudo
-  if ! which "envsubst"; then
-    echo ""
-    echo "envsubst command not found"
-    echo "Please install  gettext-base package"
-
-    exit
-  fi
-
-  if ! nginx -v; then
-    echo ""
-    echo "Please install Nginx server"
-    echo "You can install it with:"
-    echo " $ ./lemptool -ng"
+  if ! systemctl restart php$CURRENT_PHP_VERSION-fpm; then
+    echo "Error on php fpm restart"
     exit 1
   fi
 
-  if ! php -v; then
-    echo ""
-    echo "Please install php"
-    echo "You can install it with:"
-    echo " $ ./lemptool -p=<php-version>"
+  export DOLLAR="$"
+  export PERCENT="%"
+  export NG_SERVER_PATH
+  export NG_SERVER_DOMAIN
+  export NG_SERVER_FPM_NAME
 
+  AVAILABLE_SERVERS_PATH="/etc/nginx/sites-available"
+  ENABLED_SERVERS_PATH="/etc/nginx/sites-enabled"
+  CURRENT_SERVER_FILE="$AVAILABLE_SERVERS_PATH/$NG_SERVER_DOMAIN.conf"
+  if !  envsubst < "templates/laravel/nginx/server/server_unit_template" > "$CURRENT_SERVER_FILE"; then
+    echo "Error on nginx server unit file creation"
     exit 1
   fi
 
-  CURRENT_PHP_VERSION=$(php -v | grep PHP)
-  CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
-  FPM_USER=$1
-  FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$FPM_USER.conf"
-  if [[ -z "$FPM_USER" && -f "$FPM_POOL_FILE" ]]; then
-    echo "This script needs a username with a valid fpm pool "
-    echo "Please run with a username as param"
-    echo "Usage example:  "
-    echo "    $ ./lemptool -fpm=myusername"
-    exit
+
+  ln -s "$CURRENT_SERVER_FILE" "$ENABLED_SERVERS_PATH/$NG_SERVER_DOMAIN.conf";
+
+  if ! nginx -t; then
+    echo "Error on nginx server unit content"
+    exit 1
   fi
 
-}
+  if ! systemctl restart nginx; then
+    echo "Error on nginx restart"
+    exit 1
+  fi
 
+  echo "Nginx server successfully created"
+
+}
 install_phpmyadmin() {
   validate_sudo
   echo ""

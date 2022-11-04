@@ -8,7 +8,7 @@ show_help() {
   echo ""
   echo "Usage:"
   echo ""
-  echo "lemptool [--option1 --option2 ...] [--param1=value1_2 value2_2 --param2=value2_1  ...]"
+  echo "lemptool [--option1 --option2 -y ...] [--param1=value1_2 value2_2 --param2=value2_1  ...]"
   echo ""
   echo "Option arguments are value less, instead with param arguments you can pass"
   echo "string values after the (=) sing."
@@ -19,6 +19,8 @@ show_help() {
   echo "                             nginx + php + mariadb + extra-laravel-development"
   echo "                             deb packages. "
   echo ""
+  echo "                         -y  You can pass this option to skip all the confirmation"
+  echo "                             messages, is valid for all th below commands/options"
   echo " -pki=   --package-install=  Installs os packages."
   echo "                             Usage example:  "
   echo "                                 $ ./lemptool -pki=htop nodejs git"
@@ -40,12 +42,12 @@ show_help() {
   echo "                             Usage example:  "
   echo "                                 $ ./lemptool -fpm=myusername"
   echo ""
-  #    echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
-  #    echo "                             it needs a os user with a php fpm pool asingned,"
-  #    echo "                             it also needs the path of the public project folder."
-  #    echo "                             Usage example:  "
-  #    echo '                              $ ./lemptool -lemp="myusername" "the/project/public"'
-  #    echo ""
+  echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
+  echo "                             it needs valid fpm pool, a domain and files path"
+  echo "                             for public files to serve."
+  echo "                             Usage example:  "
+  echo '                             $ ./lemptool -lemp="fpm-name" "domain" "/public/path"'
+  echo ""
   echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
   echo "                             It does so using fpm, so it create a php-fpm with"
   echo "                             a os 'phpmyadmin' user, also it create an nginx server "
@@ -153,12 +155,8 @@ for i in "$@"; do
     shift # past arg
     ;;
   -lemp=*|--lemp-create=*)
-    ng_fpm_server_create "${i#*=}"
-    #        echo  "${i#*=}"
-    #        for var in "$@"
-    #        do
-    #            echo "$var"
-    #        done
+    add_script "fpm_ng_server_create"
+    add_argument "${i#*=}"
     shift # past arg
     ;;
   --phpmyadmin-install*)
