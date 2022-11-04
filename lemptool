@@ -73,7 +73,10 @@ clear_state() {
 }
 
 run_current_script(){
-
+#  echo "script to run"
+#  echo "$CURRENT_SCRIPT"
+#  echo "arguments"
+#  echo "$SCRIPT_ARGUMENTS"
   $CURRENT_SCRIPT $SCRIPT_ARGUMENTS
 }
 
@@ -132,7 +135,7 @@ for i in "$@"; do
     ;;
   -mdb* | --mariadb-install*)
     add_script "install_mariadb"
-    add_argument "${i#*=}"
+    #add_argument "${i#*=}"
 
     shift # past arg
     ;;

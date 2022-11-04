@@ -38,6 +38,18 @@ validate_nginx(){
   fi
 }
 
+check_for_y(){
+  confirmation=0
+  for i in "$@"; do
+    if [ $i == "-y" ];then 
+      confirmation=1
+    fi
+  done
+
+  return $confirmation
+
+}
+
 
 
 install_extra_packages_for_laravel_dev() {
@@ -171,25 +183,42 @@ install_nginx() {
 
 }
 
+
+#---------------MARIADB INSTALL-------------------
+
 install_mariadb() {
+
+  show_confirmations=1
+  if  ! check_for_y $@; then 
+    show_confirmations=0
+  fi
+
 
   validate_sudo
 
+  echo "> message:"
   echo "If Official repositories for Mariadb 10.6 are not set, this script will add it, after it will install Mariadb 10.6 in this machine"
-  confirmation_message
+  if [ $show_confirmations -eq 1 ]; then
+    confirmation_message
+  else
+    echo "> message:"
+    echo "Confirmation avoided !"
+  fi 
 
   validate_distro_name "Ubuntu" "Debian"
 
   BASE_MARIADB_REPO_URL="https://mirror.rackspace.com/mariadb/repo/10.6/${CURRENT_DISTRO_NAME,,}"
 
+  echo "> message:"
   echo "Some packages are needed in order to repository manipulation (install or detected mariadb official repositories also for maria db installation)."
 
   install_deb_repo_packages
 
-  validate_installed_repo "$BASE_MARIADB_REPO_URL"
+  
 
-  if [[ "$?" -eq 1 ]]; then
+  if ! validate_installed_repo "$BASE_MARIADB_REPO_URL"; then
     echo ""
+    echo "> message:"
     echo "Official MariaDB repositeries where NOT found..."
 
     MARIA_DB_REPO=""
@@ -205,17 +234,21 @@ install_mariadb() {
       MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
       #echo "$MARIA_DB_REPO"
     fi
+    echo "> message:"
     echo "Adding repository gpg key..."
     sudo curl -o /etc/apt/trusted.gpg.d/mariadb_release_signing_key.asc 'https://mariadb.org/mariadb_release_signing_key.asc'
+    echo "> message:"
     echo "Adding the repository to sources list: $MARIA_DB_REPO "
     sudo sh -c "echo '$MARIA_DB_REPO' >>/etc/apt/sources.list"
     echo ""
   else
     echo ""
+    echo "> message:"
     echo "Official MariaDB repository where found..."
   fi
   echo ""
-  echo "Continuing with maria db package install"
+  echo "> message:"
+  echo "Continue with maria db package install"
   sudo apt update
   packages_installer -y mariadb-server-10.6
 
