@@ -9,6 +9,15 @@ validate_sudo(){
     exit 1
 	fi
 }
+validate_envsubst(){
+  if ! which "envsubst"; then
+    echo ""
+    echo "envsubst command not found"
+    echo "For deb based distros it can be install with:"
+    echo " $ sudo apt install  gettext-base package"
+    exit
+  fi
+}
 
 
 user_exists(){
@@ -32,9 +41,7 @@ confirmation_message(){
 }
 
 not_exiting_confirmation_message(){
-  if ACCEPT_ALL; then
-    return 0
-  fi
+
 	read -p "Are you sure to contnue ? [Y/n] " -n 1 -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]
 	then
@@ -60,6 +67,9 @@ validate_installed_repo(){
 get_os_info(){
 	export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
 	export CURRENT_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
+#	export CURRENT_DISTRO_NAME="Doritos"
+#	export CURRENT_DISTRO_VERSION="Queso"
+
 	return 0	
 }
 
@@ -85,7 +95,8 @@ validate_distro_name(){
 	      echo "Valid distro names are:"
 	      for name in "$@"; do echo "$name"; done
 	      echo ""
-	      read -p -r "Please type one of the names from the above list to select it: " CURRENT_DISTRO_NAME
+	      echo "Please type one of the names from the above list to select it: " 
+	      read -r CURRENT_DISTRO_NAME
 	      validate_distro_name "$@"
 
 	else
@@ -141,6 +152,7 @@ packages_installer(){
   PACKAGES=""
   # shellcheck disable=SC2068
   for package in $@; do
+
     if [ "$package" == "-y" ];then
       CONFIRMATION=0
     else
@@ -152,14 +164,14 @@ packages_installer(){
   if [ $CONFIRMATION == 1 ];then
     echo "This script will install the next packages:"
     # shellcheck disable=SC2068
-    for package in $@; do
-      echo " $package"
+    for package in $PACKAGES; do
+      echo "$package"
     done
     confirmation_message
-    sudo apt install "$@"
+    sudo apt install $PACKAGES
     return $?
   else
-    sudo apt install -y "$@"
+    sudo apt install -y $PACKAGES
     return $?
   fi
 
