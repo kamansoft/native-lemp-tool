@@ -60,6 +60,9 @@ validate_installed_repo(){
 get_os_info(){
 	export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
 	export CURRENT_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
+#	export CURRENT_DISTRO_NAME="Doritos"
+#	export CURRENT_DISTRO_VERSION="Queso"
+
 	return 0	
 }
 
@@ -85,7 +88,8 @@ validate_distro_name(){
 	      echo "Valid distro names are:"
 	      for name in "$@"; do echo "$name"; done
 	      echo ""
-	      read -p -r "Please type one of the names from the above list to select it: " CURRENT_DISTRO_NAME
+	      echo "Please type one of the names from the above list to select it: " 
+	      read -r CURRENT_DISTRO_NAME
 	      validate_distro_name "$@"
 
 	else

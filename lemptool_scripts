@@ -124,17 +124,33 @@ install_php() {
 
 }
 
+
+#---------------NGINX INSTALL-------------------
+
+
 install_nginx() {
+  show_confirmations=1
+  if  ! check_for_y $@; then 
+    show_confirmations=0
+  fi
+
 
   validate_sudo
+  echo "> message:"
   echo "This script will uninstall current version of nginx if installed."
   echo "Also will install the sury nginx-mainline repo to work with sury php repositories"
   echo "Then, this script will install lastet version of nginx server "
-  confirmation_message
+  if [ $show_confirmations -eq 1 ]; then
+    confirmation_message
+  else
+    echo "> message:"
+    echo "Confirmation avoided !"
+  fi 
 
   sudo systemctl stop nginx
   sudo apt-get -y autoremove nginx*
 
+  echo "> message:"
   echo "Some packages are needed in order to repository manipulation (install or detected sury mainline nginx  repositories also for nginx installation)."
   install_deb_repo_packages
   validate_distro_name "Ubuntu" "Debian"
@@ -143,11 +159,13 @@ install_nginx() {
 
     PPA_UBUNTU_REPO="ondrej/nginx-mainline"
     validate_installed_repo $PPA_UBUNTU_REPO
-    if [[ "$?" -eq 1 ]]; then
+    if ! validate_installed_repo $PPA_UBUNTU_REPO ; then
+      echo "> message:"
       echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
       echo "Adding $PPA_UBUNTU_REPO ppa repository"
       sudo add-apt-repository -y ppa:$PPA_UBUNTU_REPO
     else
+      echo "> message:"
       echo "The $PPA_UBUNTU_REPO repository is already installed."
 
     fi
@@ -157,26 +175,25 @@ install_nginx() {
     DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
     validate_installed_repo "$DEBIAN_REPO"
     if [[ "$?" -eq 1 ]]; then
+      echo "> message:"
       echo "Adding the $DEBIAN_REPO repository"
 
       GPG_URL=https://packages.sury.org/nginx-mainline/apt.gpg
-      #GPG_KEY_PATH="/usr/share/keyrings/deb.sury.org-nginx-mainline.gpg"
       GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-nginx-mainline-keyring.gpg"
-      #SIGNED_DEBIAN_REPO="deb [signed-by=$GPG_KEY_PATH] $DEBIAN_REPO "
       UNSIGNED_REPO="deb $DEBIAN_REPO "
 
       echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
 
-      #sudo curl -sSLo $GPG_KEY_PATH https://packages.sury.org/nginx-mainline/apt.gpg
       curl -fsSL $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
 
-      #sudo sh -c "echo $SIGNED_DEBIAN_REPO >/etc/apt/sources.list.d/nginx-mainline.list"
     else
+      echo "> message:"
       echo "sury Nginx mainline repo already installed "
     fi
 
   fi
 
+  echo "> message:"
   echo "Installing nginx and related packages"
   sudo apt update
   packages_installer nginx-core nginx-common nginx nginx-full -y
