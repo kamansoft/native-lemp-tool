@@ -596,7 +596,45 @@ install_phpmyadmin() {
 
 }
 
+add_mdb_superuser(){
+  validate_sudo
+  validate_mariadb
 
+
+  MDB_USERNAME=""
+  MDB_PASSWORD=""
+  MDB_HOST="%"
+  if [ -z "$1" ]; then
+    echo "Please type the username to add"
+    read -r MDB_USERNAME
+  else
+    MDB_USERNAME="$1"
+  fi
+
+  if [ -z "$2" ]; then
+    echo "Please type the password for $MDB_USERNAME"
+    read -r MDB_PASSWORD
+  else
+    MDB_PASSWORD="$2"
+  fi
+
+  if [ -n "$3" ]; then
+    MDB_HOST="$3"
+  fi
+
+
+
+  #CREATE_USER_QUERY="CREATE USER '$MDB_USERNAME'@'%' IDENTIFIED  BY '$MDB_PASSWORD';GRANT USAGE ON *.* TO '$MDB_USERNAME'@'%' REQUIRE NONE WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;CREATE DATABASE IF NOT EXISTS $MDB_USERNAME; GRANT ALL PRIVILEGES ON $MDB_USERNAME.* TO '$MDB_USERNAME'@'%'; "
+  CREATE_USER_QUERY="CREATE USER IF NOT EXISTS '$MDB_USERNAME'@'%' IDENTIFIED BY '$MDB_PASSWORD';GRANT ALL PRIVILEGES ON *.* TO '$MDB_USERNAME'@'%' REQUIRE NONE WITH GRANT OPTION MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;FLUSH PRIVILEGES;"
+  if echo "$CREATE_USER_QUERY" | mysql ; then
+    echo "SUPER User $MDB_USERNAME @ $MDB_HOST created "
+    return 0
+  else
+    echo "Error creating user $MDB_USERNAME"
+    return 1
+  fi
+
+}
 add_mdb_user_with_db(){
 
   validate_sudo
