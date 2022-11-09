@@ -36,6 +36,10 @@ show_help() {
   echo "                             Usage example:"
   echo "                              $ ./lemptool --mariadb-user-db-create=user password"
   echo ""
+  echo " --mariadb-superuser-create  Creates a new Mariadb superuser. and gran all rights"
+  echo "                             Usage example:"
+  echo "                              $ ./lemptool --mariadb-superuser-create=user password"
+  echo ""
   echo " -p=         --php-install=  Installs a php version on system together with "
   echo "                             dependencies for laravel development,it also"
   echo "                             installs composer."
@@ -147,6 +151,11 @@ for i in "$@"; do
     ;;
   --mariadb-user-db-create=*)
     add_script "add_mdb_user_with_db"
+    add_argument "${i#*=}"
+    shift # past arg
+    ;;
+  --mariadb-superuser-create=*)
+    add_script "add_mdb_superuser"
     add_argument "${i#*=}"
     shift # past arg
     ;;
