@@ -63,7 +63,7 @@ show_help() {
   echo "                             that user, it solflink it from user home folder and create and" 
   echo "                             runs  --fpm-ng-server-create and --mariadb-user-db-create"
   echo "                             Usage example:"
-  echo '                             $ ./lemptool lemp="username" "domain" "/public/path" "dbpassword"'
+  echo '                             $ ./lemptool lemp="username" "domain" "dbpassword"'
   echo ""
   echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
   echo "                             It does so using fpm, so it create a php-fpm with"

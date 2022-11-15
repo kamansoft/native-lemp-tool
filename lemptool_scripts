@@ -38,6 +38,17 @@ validate_nginx(){
   fi
 }
 
+
+php_version_number(){
+  stdout "$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")"
+}
+
+php_config_path(){
+  PHP_VERSION="$(php_version_number)"
+  stdout "/etc/php/$PHP_VERSION"
+}
+
+
 check_for_y(){
   confirmation=0
   for i in "$@"; do
@@ -231,9 +242,6 @@ install_nginx() {
 
 #---------------MARIADB INSTALL-------------------
 install_mariadb() {
-
-
-
   validate_sudo
 
   echo "> message:"
@@ -331,7 +339,7 @@ fpm_create() {
     else
       echo ""
       echo ""
-      echo "User $FPM_DESIRED_USERNAME is not valid."
+      echo "User $FPM_DESIRED_USERNAME dose not exists in os."
       echo "A new user $FPM_DESIRED_USERNAME can be created."
 
       if [ $show_confirmations -eq 1 ]; then
@@ -356,10 +364,11 @@ fpm_create() {
     echo ""
   done
 
-  CURRENT_PHP_VERSION=$(php -v | grep PHP)
-  CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+
+  #CURRENT_PHP_VERSION=$(php_version_number)
+  PHP_CONFIG_PATH=$(php_config_path)
   FPM_USER=$FPM_DESIRED_USERNAME
-  FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$FPM_USER.conf"
+  FPM_POOL_FILE="$PHP_CONFIG_PATH/fpm/pool.d/$FPM_USER.conf"
   export DOLLAR="$"
   export PERCENT="%"
   export FPM_USER
@@ -406,8 +415,9 @@ fpm_ng_server_create(){
       exit 1
   fi
 
-  CURRENT_PHP_VERSION=$(php -v | grep PHP)
-  CURRENT_PHP_VERSION=${CURRENT_PHP_VERSION:4:3}
+  CURRENT_PHP_VERSION=$(php_version_number)
+  CURRENT_PHP_CONFIG_PATH=$(php_config_path)
+
 
 
   if [ -z "$NG_SERVER_FPM_NAME" ]; then
@@ -419,7 +429,7 @@ fpm_ng_server_create(){
 
 
 
-  FPM_POOL_FILE="/etc/php/$CURRENT_PHP_VERSION/fpm/pool.d/$NG_SERVER_FPM_NAME.conf"
+  FPM_POOL_FILE="$CURRENT_PHP_CONFIG_PATH/fpm/pool.d/$NG_SERVER_FPM_NAME.conf"
 
   if [ ! -f "$FPM_POOL_FILE" ]; then
     echo "> message:"
@@ -491,21 +501,55 @@ lemp_create(){
   LEMP_USER=$1
   LEMP_DOMAIN=$2
   LEMP_DBUSER_PASSWORD=$3
+  LEMP_PATH=$4
+
+
 
   if [ -z "$LEMP_DBUSER_PASSWORD" ]; then
     echo "The password for db user param is mandatory"
+    echo "look for help with --help"
+    echo '$ ./lemptool lemp="username" "domain" "dbpassword"'
     exit 1
   fi
 
   if [ -z "$LEMP_DOMAIN" ]; then
     echo "The domain param is mandatory"
+    echo "look for help with --help"
+    echo '$ ./lemptool lemp="username" "domain" "dbpassword"'
     exit 1
   fi
 
   if [ -z "$LEMP_USER" ]; then
     echo "The os user param is mandatory"
+    echo "look for help with --help"
+    echo '$ ./lemptool lemp="username" "domain" "dbpassword"'
     exit 1
   fi
+
+  if ! id "$FPM_DESIRED_USERNAME" >/dev/null 2>&1; then
+   echo "User $LEMP_USER does not exist"
+   echo "Please use a valid os user"
+   exit 1
+  fi
+
+  DEFAULT_LEMP_PATH="/var/www/$LEMP_USER/$LEMP_DOMAIN"
+  if [ -z "$LEMP_PATH" ] || [ ! -d "$LEMP_PATH" ] ; then
+    echo "> message:"
+    echo "The path "$LEMP_PATH" is empty or does not exist"
+    echo "this script can continue the lemp creation with a default path:"
+    echo "$DEFAULT_LEMP_PATH"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+    else
+      echo "> message:"
+      echo "Confirmation avoided !"
+    fi
+    LEMP_PATH=$DEFAULT_LEMP_PATH
+    if [ ! -d "$LEMP_PATH" ]; then
+      mkdir -p "$LEMP_PATH"
+    fi
+  fi
+
 
   str="$LEMP_DOMAIN"
   oldstr="-"
@@ -513,7 +557,32 @@ lemp_create(){
   str=$(echo $str | sed "s/$oldstr/$newstr/g")
   oldstr="."
   newstr="_"
-  LEMP_DOMAIN_SCAPED=$(echo $str | sed "s/$oldstr/$newstr/g")
+  LEMP_DOMAIN_ESCAPED=$(echo $str | sed "s/$oldstr/$newstr/g")
+
+
+
+  chown -R "$LEMP_USER":"$LEMP_USER" "$LEMP_PATH"
+  ln -s "$LEMP_PATH" "/home/$LEMP_USER/$LEMP_DOMAIN"
+
+  CURRENT_PHP_VERSION=$(php_version_number)
+  PHP_CONFIG_PATH=$(php_config_path)
+  FPM_POOL_FILE="$PHP_CONFIG_PATH/fpm/pool.d/$LEMP_USER.conf"
+
+
+  if [ ! -f "$FPM_POOL_FILE" ]; then
+    echo "> message:"
+    echo "Fpm pool file $FPM_POOL_FILE does not exist"
+    echo "A new fpm file can be created for $LEMP_USER"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+      fpm_create $LEMP_USER
+    else
+      echo "> message:"
+      echo "Confirmation avoided !"
+      fpm_create $LEMP_USER -y
+    fi
+
+  fi
 
 
 
@@ -564,14 +633,11 @@ add_mdb_user(){
     return 1
   fi
 }
-
 add_mdb_superuser(){
   if ! add_mdb_user "$@" ;then
     echo "Super user can not be created"
     exit
   fi
-
-
 
   CREATE_USER_QUERY="GRANT ALL PRIVILEGES ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH GRANT OPTION MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;FLUSH PRIVILEGES;"
   if echo "$CREATE_USER_QUERY" | mysql ; then
