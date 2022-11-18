@@ -40,12 +40,12 @@ validate_nginx(){
 
 
 php_version_number(){
-  stdout "$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")"
+  php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"
 }
 
 php_config_path(){
   PHP_VERSION="$(php_version_number)"
-  stdout "/etc/php/$PHP_VERSION"
+  echo   "/etc/php/$PHP_VERSION"
 }
 
 
@@ -307,7 +307,6 @@ install_mariadb() {
 fpm_create() {
 
   validate_sudo
-
   validate_envsubst
   validate_php
 
@@ -316,7 +315,7 @@ fpm_create() {
     echo "Please run with a username as param"
     echo "Usage example:  "
     echo "    $ ./lemptool -fpm=myusername"
-    exit
+    exit 1
   fi
 
   FPM_DESIRED_USERNAME="$1"
@@ -365,7 +364,7 @@ fpm_create() {
   done
 
 
-  #CURRENT_PHP_VERSION=$(php_version_number)
+  CURRENT_PHP_VERSION=$(php_version_number)
   PHP_CONFIG_PATH=$(php_config_path)
   FPM_USER=$FPM_DESIRED_USERNAME
   FPM_POOL_FILE="$PHP_CONFIG_PATH/fpm/pool.d/$FPM_USER.conf"
@@ -373,9 +372,26 @@ fpm_create() {
   export PERCENT="%"
   export FPM_USER
 
+  if [  -f "$FPM_POOL_FILE" ]; then
+    echo "FPM pool file $FPM_POOL_FILE already exists, if you continue it will  be overwritten"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+    else
+      echo "> message:"
+      echo "Confirmation avoided !"
+    fi
+    rm -f "$FPM_POOL_FILE"
+  fi
+
+
   if !  envsubst < "templates/fpm_create/pool_template" > "$FPM_POOL_FILE"; then
     echo "Error on php fpm pool creation"
-    exit
+    exit 1
+  fi
+
+  if ! systemctl restart php"$CURRENT_PHP_VERSION"-fpm; then
+    echo "The php fpm service is not starting"
+    exit 1
   fi
 
   echo "php fpm pool successfully created"
@@ -463,8 +479,14 @@ fpm_ng_server_create(){
 
 
   if [  -f "$CURRENT_SERVER_FILE" ]; then
-    echo "Nginx server file $CURRENT_SERVER_FILE already exists, and it will not be overwriten"
-    exit 1
+    echo "Nginx server file $CURRENT_SERVER_FILE already exists, if you continue it will  be overwritten"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+    else
+      echo "> message:"
+      echo "Confirmation avoided !"
+    fi
+    rm -f "$CURRENT_SERVER_FILE"
   fi
 
 
@@ -497,6 +519,7 @@ lemp_create(){
   validate_sudo
   validate_php
   validate_nginx
+  validate_mariadb
 
   LEMP_USER=$1
   LEMP_DOMAIN=$2
@@ -526,7 +549,7 @@ lemp_create(){
     exit 1
   fi
 
-  if ! id "$FPM_DESIRED_USERNAME" >/dev/null 2>&1; then
+  if ! id "$LEMP_USER" >/dev/null 2>&1; then
    echo "User $LEMP_USER does not exist"
    echo "Please use a valid os user"
    exit 1
@@ -552,10 +575,8 @@ lemp_create(){
 
 
   str="$LEMP_DOMAIN"
+  str="${str//./_}"
   oldstr="-"
-  newstr="_"
-  str=$(echo $str | sed "s/$oldstr/$newstr/g")
-  oldstr="."
   newstr="_"
   LEMP_DOMAIN_ESCAPED=$(echo $str | sed "s/$oldstr/$newstr/g")
 
@@ -575,17 +596,59 @@ lemp_create(){
     echo "A new fpm file can be created for $LEMP_USER"
     if [ $show_confirmations -eq 1 ]; then
       confirmation_message
-      fpm_create $LEMP_USER
     else
       echo "> message:"
       echo "Confirmation avoided !"
-      fpm_create $LEMP_USER -y
     fi
 
+    if ! fpm_create $LEMP_USER ; then
+      echo "> error:"
+      echo "FPM cant be created"
+      exit 1
+    fi
+  fi
+
+  if ! add_mdb_user_with_db $LEMP_DOMAIN_ESCAPED $LEMP_DBUSER_PASSWORD; then
+    echo "> error:"
+    echo "Error on  user or db creation using: $LEMP_DOMAIN_ESCAPED name"
+    echo "Do you wish to continue the lemp creation without the database?"
+    if [ $show_confirmations -eq 1 ]; then
+      confirmation_message
+    else
+      echo "> message:"
+      echo "Confirmation avoided !, continue without database"
+    fi
+  fi
+
+  if  ! fpm_ng_server_create $LEMP_USER $LEMP_DOMAIN $LEMP_PATH; then
+    rm -f "/home/$LEMP_USER/$LEMP_DOMAIN"
+    echo "> error:"
+    echo "Error on lemp creation"
+    exit 1
+  fi
+
+  export CURRENT_PHP_VERSION
+  export LEMP_USER
+  export LEMP_PATH
+  export LEMP_DOMAIN
+  export LEMP_DOMAIN_ESCAPED
+
+  if !  envsubst < "templates/lemp/index.php.template" > "$LEMP_PATH/index.php"; then
+    echo "> error:"
+    echo "index.php template creation"
   fi
 
 
 
+
+  chown -R "$LEMP_USER":"$LEMP_USER" "$LEMP_PATH"
+  echo ""
+  echo ""
+  echo "Lemp successfully created with:";
+  echo "User: $LEMP_USER";
+  echo "Domain: $LEMP_DOMAIN"
+  echo "DB and User: $LEMP_DOMAIN_ESCAPED"
+  echo "DB USER PASS: $LEMP_DBUSER_PASSWORD"
 
 
 }
@@ -596,7 +659,7 @@ add_mdb_user(){
   validate_mariadb
   MDB_USERNAME=""
   MDB_PASSWORD=""
-  MDB_HOST="%"
+
   if [ -z "$1" ]; then
     echo "Please type the username to add"
     read -r MDB_USERNAME
@@ -609,11 +672,11 @@ add_mdb_user(){
   else
     MDB_PASSWORD="$2"
   fi
+  MDB_HOST="%"
   if [ -n "$3" ]; then
-
     MDB_HOST="$3"
   else
-    echo "You dint gave a hostname for this new user:  $MDB_USERNAME "
+    echo "A hostname for this new user:  $MDB_USERNAME  was not provided"
     echo "User will be created with % as host."
     if [ $show_confirmations -eq 1 ]; then
       confirmation_message
@@ -621,7 +684,6 @@ add_mdb_user(){
       echo "> message:"
       echo "Confirmation avoided !"
     fi
-    MDB_HOST="%"
   fi
 
   CREATE_USER_QUERY="CREATE USER IF NOT EXISTS '$MDB_USERNAME'@'$MDB_HOST' IDENTIFIED BY '$MDB_PASSWORD';"
@@ -636,7 +698,7 @@ add_mdb_user(){
 add_mdb_superuser(){
   if ! add_mdb_user "$@" ;then
     echo "Super user can not be created"
-    exit
+    exit 1
   fi
 
   CREATE_USER_QUERY="GRANT ALL PRIVILEGES ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH GRANT OPTION MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;FLUSH PRIVILEGES;"
@@ -650,15 +712,13 @@ add_mdb_superuser(){
 }
 add_mdb_user_with_db(){
   if ! add_mdb_user "$@" ;then
-    echo "Super user can not be created"
-    exit
+    echo "User can not be created"
+    exit 1
   fi
 
-
-  CREATE_USER_QUERY="GRANT USAGE ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`; GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$MDB_USERNAME'@'$MDB_HOST'; "
-  echo CREATE_USER_QUERY
+  CREATE_USER_QUERY="GRANT USAGE ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;CREATE DATABASE IF NOT EXISTS \`$MDB_USERNAME\`; GRANT ALL PRIVILEGES ON \`$MDB_USERNAME\`.* TO '$MDB_USERNAME'@'$MDB_HOST'; "
   if echo "$CREATE_USER_QUERY" | mysql ; then
-    echo "User $MDB_USERNAME @ $MDB_HOST created with a database named $DB_NAME"
+    echo "User $MDB_USERNAME @ $MDB_HOST created with a database named $MDB_USERNAME"
     return 0
   else
     echo "Error creating user $MDB_USERNAME db "
@@ -678,7 +738,7 @@ install_phpmyadmin() {
     echo "envsubst command not found"
     echo "Please install  gettext-base package"
 
-    exit
+    exit 1
   fi
 
   PHPMYADMIN_VERSION="5.2.0"
@@ -709,13 +769,7 @@ install_phpmyadmin() {
   cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
   sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
 
-
   fpm_create "$PHPMYADMIN_USERNAME"
-
-  if ! systemctl restart php"$CURRENT_PHP_VERSION"-fpm; then
-    echo "The php fpm service is not starting"
-    exit
-  fi
 
   echo "A domain for phpmyadmin nginx server is needed."
   echo ""
@@ -725,7 +779,9 @@ install_phpmyadmin() {
   echo ""
 
   for (( ; ; )); do
-    echo "Please type the domain that your phpmyadmin installation will use:"
+    echo "This script needs a root domain name to prepend the 'phpmyadmin' subdomain."
+    echo "Example: for phpmyadmin.some-root-domain.com,  'some-root-domain.com' is needed."
+    echo "Please type the root domain name that your phpmyadmin installation will use:"
     read -r PHPMYADMIN_DOMAIN
     echo ""
     echo "Are you sure the domain to use is $PHPMYADMIN_DOMAIN ? [Y/n] "

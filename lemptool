@@ -105,7 +105,11 @@ run_current_script(){
   y__replaced=$(echo $str | sed "s/$oldstr/$newstr/g")
   SCRIPT_ARGUMENTS_NO_Y=$y__replaced
 
-  $CURRENT_SCRIPT $SCRIPT_ARGUMENTS_NO_Y
+  if ! $CURRENT_SCRIPT $SCRIPT_ARGUMENTS_NO_Y ; then
+    echo "Error running script $CURRENT_SCRIPT"
+    echo ""
+    show_help
+  fi
 }
 
 add_argument(){
@@ -187,6 +191,11 @@ for i in "$@"; do
     ;;
   --fpm-ng-server-create=*)
     add_script "fpm_ng_server_create"
+    add_argument "${i#*=}"
+    shift # past arg
+    ;;
+  -lemp=*)
+    add_script "lemp_create"
     add_argument "${i#*=}"
     shift # past arg
     ;;
