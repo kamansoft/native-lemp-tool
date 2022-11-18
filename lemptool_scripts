@@ -334,7 +334,14 @@ fpm_create() {
     fi
 
     if id "$FPM_DESIRED_USERNAME" >/dev/null 2>&1; then
-      break
+
+      if getent group $FPM_DESIRED_USERNAME | grep -q "\b${FPM_DESIRED_USERNAME}\b"; then
+         echo "user $FPM_DESIRED_USERNAME approved"
+          break
+      else
+        echo "$FPM_DESIRED_USERNAME is not in $FPM_DESIRED_USERNAME group"
+        echo "user is invalid"
+      fi
     else
       echo ""
       echo ""
@@ -417,7 +424,7 @@ fpm_ng_server_create(){
 
   if [ -z "$NG_SERVER_DOMAIN" ]; then
     echo "This script needs a domain to configure nginx sever"
-    echo "Please type a domainr"
+    echo "Please type a domain"
     read -r NG_SERVER_DOMAIN
   fi
 
