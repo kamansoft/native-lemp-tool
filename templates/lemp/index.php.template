@@ -1,0 +1,20 @@
+<html>
+ <head>
+  <title>It works !</title>
+ </head>
+ <body>
+
+  <h1>${LEMP_DOMAIN}</h1>
+  <p>Your server setup with php-fpm <b>is working!</b></p>
+  <p><?php echo date("Y-m-d")." ".date("h:i a"); ?></p>
+
+  <div>
+      <ul>
+           <li>PHP version:  <b>${CURRENT_PHP_VERSION}</b></li>
+           <li>PHP FPM user:  <b>${LEMP_USER}</b></li>
+           <li>Public Path:  <b>${LEMP_PATH}</b></li>
+           <li>DB name and user:  <b>${LEMP_DOMAIN_ESCAPED}</b></li>
+      </ul>
+  </div>
+ </body>
+</html>

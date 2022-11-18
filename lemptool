@@ -34,11 +34,11 @@ show_help() {
   echo "                             the newly created database."
   echo "                             It needs a user and a password as parameters."
   echo "                             Usage example:"
-  echo "                              $ ./lemptool --mariadb-user-db-create=user password"
+  echo "                              $ ./lemptool --mariadb-user-db-create=user password host"
   echo ""
   echo " --mariadb-superuser-create  Creates a new Mariadb superuser. and gran all rights"
   echo "                             Usage example:"
-  echo "                              $ ./lemptool --mariadb-superuser-create=user password"
+  echo "                              $ ./lemptool --mariadb-superuser-create=user password host"
   echo ""
   echo " -p=         --php-install=  Installs a php version on system together with "
   echo "                             dependencies for laravel development,it also"
@@ -53,28 +53,22 @@ show_help() {
   echo "                             Usage example:  "
   echo "                                 $ ./lemptool -fpm=myusername"
   echo ""
-  echo " -lemp=       --lemp-create  Creates a new laravel in mind, nginx server unit"
-  echo "                             it needs valid fpm pool, a domain and files path"
-  echo "                             for public files to serve."
-  echo "                             Usage example:  "
-  echo '                             $ ./lemptool -lemp="fpm-name" "domain" "/public/path"'
+  echo "     --fpm-ng-server-create  Creates a new (laravel in mind), nginx server unit"
+  echo "                             together with a existing valid fpm pool, a domain" 
+  echo "                             and local public files path to serve  as params."
+  echo "                             Usage example:"
+  echo '                             $ ./lemptool --fpm-ng-server-create="fpm-name" "domain" "/public/path"'
+  echo ""
+  echo " -lemp                       It takes a  OS user create a folder at /var/www/ with the name of "
+  echo "                             that user, it solflink it from user home folder and create and" 
+  echo "                             runs  --fpm-ng-server-create and --mariadb-user-db-create"
+  echo "                             Usage example:"
+  echo '                             $ ./lemptool lemp="username" "domain" "dbpassword"'
   echo ""
   echo "       --phpmyadmin-install  Installs phpmyadmin from official source."
   echo "                             It does so using fpm, so it create a php-fpm with"
   echo "                             a os 'phpmyadmin' user, also it create an nginx server "
   echo ""
-  #	echo " -la=, --local-domain-add=   Add a new domain name as entry on your hosts file,"
-  #	echo "                             pointing to 127.0.0.1 (localhost). You must pass"
-  #	echo "                             the domanin name as value for this option"
-  #	echo ""
-  #	echo " -ld=, --local-domain-del=   Remove a domain name entry on your hosts file."
-  #	echo "                             You must pass the domain name as value for this option"
-  #	echo ""
-  #	echo " -fpm=, --fpm-add=           Add a new fpm file to be used."
-  #	echo "                             You must pass the domain name as value for this option"
-  #	echo ""
-  #	echo "                                                                                   -"
-
   return 0
 }
 
@@ -85,12 +79,37 @@ clear_state() {
   SCRIPT_ARGUMENTS=""
 }
 
+
+
 run_current_script(){
 #  echo "script to run"
 #  echo "$CURRENT_SCRIPT"
 #  echo "arguments"
 #  echo "$SCRIPT_ARGUMENTS"
-  $CURRENT_SCRIPT $SCRIPT_ARGUMENTS
+  
+
+  show_confirmations=1
+  for i in $SCRIPT_ARGUMENTS; do
+    if [ $i == "-y" ];then 
+      show_confirmations=0
+    fi
+  done
+
+
+  str="$SCRIPT_ARGUMENTS"
+  oldstr=" -y"
+  newstr=" "
+  _y_replaced=$(echo $str | sed "s/$oldstr/$newstr/g")
+  str="$_y_replaced"
+  oldstr="-y "
+  y__replaced=$(echo $str | sed "s/$oldstr/$newstr/g")
+  SCRIPT_ARGUMENTS_NO_Y=$y__replaced
+
+  if ! $CURRENT_SCRIPT $SCRIPT_ARGUMENTS_NO_Y ; then
+    echo "Error running script $CURRENT_SCRIPT"
+    echo ""
+    show_help
+  fi
 }
 
 add_argument(){
@@ -170,8 +189,13 @@ for i in "$@"; do
     add_argument "${i#*=}"
     shift # past arg
     ;;
-  -lemp=*|--lemp-create=*)
+  --fpm-ng-server-create=*)
     add_script "fpm_ng_server_create"
+    add_argument "${i#*=}"
+    shift # past arg
+    ;;
+  -lemp=*)
+    add_script "lemp_create"
     add_argument "${i#*=}"
     shift # past arg
     ;;
