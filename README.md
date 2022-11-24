@@ -22,8 +22,7 @@ A set of things will happen then make sure to read every confirmation message be
 
 You can also pass the --help argument in order to display some other options bundle in this script
 
-  
-
+    $sudo ./lemptool --help 
 
 
 
