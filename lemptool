@@ -145,9 +145,10 @@ for i in "$@"; do
     ;;
   -i* | --install*)
 
-    install_mariadb -y
-    install_nginx -y
-    install_php 8.1 -y
+    show_confirmations=0
+    install_mariadb
+    install_nginx
+    install_php 8.1
 
     shift # past arg
     ;;

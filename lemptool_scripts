@@ -340,7 +340,15 @@ fpm_create() {
           break
       else
         echo "$FPM_DESIRED_USERNAME is not in $FPM_DESIRED_USERNAME group"
-        echo "user is invalid"
+        echo "user is invalid, do you still want to continue ?"
+        if [ $show_confirmations -eq 1 ]; then
+          confirmation_message
+        else
+          echo "> message:"
+          echo "Confirmation avoided ! "
+          echo "script execution canceled"
+          exit 1
+        fi
       fi
     else
       echo ""
