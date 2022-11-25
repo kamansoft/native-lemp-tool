@@ -511,7 +511,7 @@ fpm_ng_server_create(){
   fi
 
 
-  ln -s "$CURRENT_SERVER_FILE" "$ENABLED_SERVERS_PATH/$NG_SERVER_DOMAIN";
+  ln -sf "$CURRENT_SERVER_FILE" "$ENABLED_SERVERS_PATH/$NG_SERVER_DOMAIN";
 
   if ! nginx -t; then
     echo "Error on nginx server unit content"
@@ -601,6 +601,7 @@ lemp_create(){
 
 
   ln -sf "$LEMP_PATH" "/home/$LEMP_USER/$LEMP_DOMAIN"
+  echo "aqui"
 
   CURRENT_PHP_VERSION=$(php_version_number)
   PHP_CONFIG_PATH=$(php_config_path)
