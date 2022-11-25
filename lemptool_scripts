@@ -598,7 +598,9 @@ lemp_create(){
 
 
   chown -R "$LEMP_USER":"$LEMP_USER" "$LEMP_PATH"
-  ln -s "$LEMP_PATH" "/home/$LEMP_USER/$LEMP_DOMAIN"
+
+
+  ln -sf "$LEMP_PATH" "/home/$LEMP_USER/$LEMP_DOMAIN"
 
   CURRENT_PHP_VERSION=$(php_version_number)
   PHP_CONFIG_PATH=$(php_config_path)
@@ -664,6 +666,8 @@ lemp_create(){
   echo "Domain: $LEMP_DOMAIN"
   echo "DB and User: $LEMP_DOMAIN_ESCAPED"
   echo "DB USER PASS: $LEMP_DBUSER_PASSWORD"
+
+  return 0
 
 
 }
