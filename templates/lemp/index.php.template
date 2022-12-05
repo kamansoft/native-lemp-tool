@@ -10,7 +10,7 @@
 
   <div>
       <ul>
-           <li>PHP version:  <b>${CURRENT_PHP_VERSION}</b></li>
+           <li>PHP version:  <b><?php echo phpversion(); ?></b></li>
            <li>PHP FPM user:  <b>${LEMP_USER}</b></li>
            <li>Public Path:  <b>${LEMP_PATH}</b></li>
            <li>DB name and user:  <b>${LEMP_DOMAIN_ESCAPED}</b></li>
