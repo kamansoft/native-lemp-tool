@@ -570,7 +570,8 @@ lemp_create(){
    exit 1
   fi
 
-  DEFAULT_LEMP_PATH="/var/www/$LEMP_USER/$LEMP_DOMAIN"
+  DEFAULT_USER_PATH_FOR_LEMP="/var/www/$LEMP_USER"
+  DEFAULT_LEMP_PATH="$DEFAULT_USER_PATH_FOR_LEMP/$LEMP_DOMAIN"
   if [ -z "$LEMP_PATH" ] || [ ! -d "$LEMP_PATH" ] ; then
     echo "> message:"
     echo "The path "$LEMP_PATH" is empty or does not exist"
@@ -586,6 +587,7 @@ lemp_create(){
     if [ ! -d "$LEMP_PATH" ]; then
       mkdir -p "$LEMP_PATH"
     fi
+    chown -R "$LEMP_USER":"$LEMP_USER" "$DEFAULT_USER_PATH_FOR_LEMP"
   fi
 
 
@@ -596,7 +598,7 @@ lemp_create(){
   LEMP_DOMAIN_ESCAPED=$(echo $str | sed "s/$oldstr/$newstr/g")
 
 
-
+  chown -R "$LEMP_USER":"$LEMP_USER" "$DEFAULT_USER_PATH_FOR_LEMP"
   chown -R "$LEMP_USER":"$LEMP_USER" "$LEMP_PATH"
 
 
