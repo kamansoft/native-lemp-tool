@@ -598,7 +598,7 @@ lemp_create(){
   LEMP_DOMAIN_ESCAPED=$(echo $str | sed "s/$oldstr/$newstr/g")
 
 
-
+  chown -R "$LEMP_USER":"$LEMP_USER" "$DEFAULT_USER_PATH_FOR_LEMP"
   chown -R "$LEMP_USER":"$LEMP_USER" "$LEMP_PATH"
 
 
