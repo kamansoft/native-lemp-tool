@@ -74,7 +74,7 @@ install_extra_packages_for_laravel_dev() {
 }
 
 validate_php_version() {
-  valid_php_versions=("8.1" "8.0" "7.4" "7.3")
+  valid_php_versions=("8.2" "8.1" "8.0" "7.4" "7.3")
   PROSPECT_VERSION=$1
   export VALUE_SELECTED_FROM_ARGS
   if [[ -n $PROSPECT_VERSION ]]; then
