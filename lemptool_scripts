@@ -74,7 +74,7 @@ install_extra_packages_for_laravel_dev() {
 }
 
 validate_php_version() {
-  valid_php_versions=("8.2" "8.1" "8.0" "7.4" "7.3")
+  valid_php_versions=("8.3" "8.2" "8.1" "8.0" "7.4" "7.3")
   PROSPECT_VERSION=$1
   export VALUE_SELECTED_FROM_ARGS
   if [[ -n $PROSPECT_VERSION ]]; then
@@ -95,7 +95,7 @@ install_php() {
   validate_php_version "$1"
   echo "> message:"
   echo "If not set, this script will install the deb.sury.org php repo."
-  echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on lavarel development."
+  echo "It will also install PHP $PHP_VERSION together with FastCGI and a some php libraries commonly used on laravel development."
 
   if [ $show_confirmations -eq 1 ]; then
     confirmation_message
@@ -245,15 +245,42 @@ install_mariadb() {
   validate_sudo
 
   echo "> message:"
-  echo "If Official repositories for Mariadb 10.6 are not set, this script will add it, after it will install Mariadb 10.6 in this machine"
+  echo "This script will install MariaDB on this machine."
   if [ $show_confirmations -eq 1 ]; then
     confirmation_message
   else
     echo "> message:"
     echo "Confirmation avoided !"
-  fi 
+  fi
 
   validate_distro_name "Ubuntu" "Debian"
+
+  # Check if the distribution is Ubuntu Noble (24.04)
+  if [[ $CURRENT_DISTRO_NAME == "Ubuntu" && $CURRENT_DISTRO_VERSION == "noble" ]]; then
+    echo "> message:"
+    echo "Detected Ubuntu Noble (24.04). Using the new MariaDB installation method."
+
+    # Add MariaDB repository using the new method
+    echo "> message:"
+    echo "Adding MariaDB repository for Ubuntu Noble..."
+    curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash
+
+    # Update the package list
+    sudo apt update
+
+    # Install MariaDB
+    echo "> message:"
+    echo "Installing MariaDB..."
+    packages_installer -y mariadb-server
+
+    echo "> message:"
+    echo "MariaDB installed successfully on Ubuntu Noble."
+    return
+  fi
+
+  # Fallback to the existing installation method for other distributions
+  echo "> message:"
+  echo "Using the standard MariaDB installation method for non-Noble distributions."
 
   BASE_MARIADB_REPO_URL="https://mirror.rackspace.com/mariadb/repo/10.6/${CURRENT_DISTRO_NAME,,}"
 
@@ -262,8 +289,6 @@ install_mariadb() {
 
   install_deb_repo_packages
 
-  
-
   if ! validate_installed_repo "$BASE_MARIADB_REPO_URL"; then
     echo ""
     echo "> message:"
@@ -271,16 +296,12 @@ install_mariadb() {
 
     MARIA_DB_REPO=""
     if [[ $CURRENT_DISTRO_NAME == Ubuntu ]]; then
-      #echo "FOR UBUNTU"
       validate_distro_version focal jammy
       MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
-      #echo "$MARIA_DB_REPO"
     fi
     if [[ $CURRENT_DISTRO_NAME == Debian ]]; then
-      #echo "FOR DEBIAN"
       validate_distro_version stretch buster bullseye
       MARIA_DB_REPO="deb $BASE_MARIADB_REPO_URL $CURRENT_DISTRO_VERSION main"
-      #echo "$MARIA_DB_REPO"
     fi
     echo "> message:"
     echo "Adding repository gpg key..."
@@ -299,8 +320,9 @@ install_mariadb() {
   echo "Continue with maria db package install"
   sudo apt update
   packages_installer -y mariadb-server-10.6
-
 }
+
+
 
 
 #---------------FPM CREATE-------------------
