@@ -148,7 +148,7 @@ for i in "$@"; do
     show_confirmations=0
     install_mariadb
     install_nginx
-    install_php 8.1
+    install_php 8.3
 
     shift # past arg
     ;;
