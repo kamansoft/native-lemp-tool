@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # Ubuntu 18.04 testing environment
+  ubuntu18-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu18
+    container_name: lemptool-ubuntu18-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+  # Ubuntu 20.04 testing environment  
+  ubuntu20-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu20
+    container_name: lemptool-ubuntu20-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+  # Ubuntu 22.04 testing environment
+  ubuntu22-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu22
+    container_name: lemptool-ubuntu22-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+  # Ubuntu 24.04 testing environment
+  ubuntu24-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu24
+    container_name: lemptool-ubuntu24-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+  # Debian 11 testing environment
+  debian11-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian11
+    container_name: lemptool-debian11-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+  # Debian 12 testing environment
+  debian12-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian12
+    container_name: lemptool-debian12-test
+    privileged: true
+    volumes:
+      - .:/opt/native-lemp-tool
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    command: tail -f /dev/null
+    networks:
+      - lemptool-test
+
+networks:
+  lemptool-test:
+    driver: bridge

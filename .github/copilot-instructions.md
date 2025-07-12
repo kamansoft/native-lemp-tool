@@ -1,0 +1,12 @@
+-Always use the README file for  documentation fast overview
+-Always extend README with detailed documentation as markdown files in the docs folder
+-Always use S.O.L.I.D. principles
+-Always include error handling in scripts
+-All scripts should be idempotent
+-All scripts should be compatible with ubuntu (18.04, 20.04, 22.04, 24.04) and debian (11, 12)
+-Always use descriptive variable names
+-Always include comments explaining complex logic
+-Always use functions to encapsulate logic
+-Always validate inputs before processing
+-Always use version control for scripts
+

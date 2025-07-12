@@ -1,0 +1,253 @@
+#!/bin/bash
+
+# Compatibility Helper Script for Native LEMP Tool
+# Ensures compatibility across Ubuntu 18.04, 20.04, 22.04, 24.04 and Debian 11, 12
+
+# Get OS information with better detection
+get_os_info_enhanced() {
+    # Try multiple methods to detect OS
+    if command -v lsb_release >/dev/null 2>&1; then
+        export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
+        export CURRENT_DISTRO_VERSION="$(lsb_release -r | cut -f 2)"
+    elif [ -f /etc/os-release ]; then
+        . /etc/os-release
+        export CURRENT_DISTRO_NAME="$ID"
+        export CURRENT_DISTRO_VERSION="$VERSION_ID"
+        # Normalize Ubuntu/Debian names
+        case "$ID" in
+            "ubuntu") export CURRENT_DISTRO_NAME="Ubuntu" ;;
+            "debian") export CURRENT_DISTRO_NAME="Debian" ;;
+        esac
+    else
+        echo "Unable to detect OS information"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Enhanced service management that works in containers and bare metal
+service_manager() {
+    local action="$1"
+    local service="$2"
+    
+    # Check if systemctl is available and functional
+    if command -v systemctl >/dev/null 2>&1 && systemctl --version >/dev/null 2>&1; then
+        case "$action" in
+            "start"|"stop"|"restart"|"enable"|"disable")
+                systemctl "$action" "$service"
+                ;;
+            "status")
+                systemctl is-active "$service" >/dev/null 2>&1
+                ;;
+            *)
+                echo "Unknown action: $action"
+                return 1
+                ;;
+        esac
+    else
+        # Fallback to service command or direct init scripts
+        echo "systemctl not available, using alternative service management"
+        case "$action" in
+            "start"|"stop"|"restart")
+                if command -v service >/dev/null 2>&1; then
+                    service "$service" "$action"
+                else
+                    "/etc/init.d/$service" "$action" 2>/dev/null || true
+                fi
+                ;;
+            "enable"|"disable")
+                # In containers, we often don't need to enable/disable services
+                echo "Service $action for $service (skipped in container environment)"
+                return 0
+                ;;
+            "status")
+                if command -v service >/dev/null 2>&1; then
+                    service "$service" status >/dev/null 2>&1
+                else
+                    pgrep -f "$service" >/dev/null 2>&1
+                fi
+                ;;
+        esac
+    fi
+}
+
+# Enhanced user creation that works across all versions
+create_user_safe() {
+    local username="$1"
+    local create_home="${2:-yes}"
+    
+    if id "$username" >/dev/null 2>&1; then
+        echo "User $username already exists"
+        return 0
+    fi
+    
+    # Check if we're in a minimal environment (like Docker)
+    if [ -f /.dockerenv ] || [ -n "$DOCKER_CONTAINER" ]; then
+        # In Docker, use useradd which is more reliable
+        if [ "$create_home" = "yes" ]; then
+            useradd -m -s /bin/bash "$username"
+        else
+            useradd -s /bin/bash "$username"
+        fi
+        
+        # Set a default password
+        echo "$username:password" | chpasswd
+    else
+        # On regular systems, use adduser with automatic mode
+        if command -v adduser >/dev/null 2>&1; then
+            # Use --quiet and --disabled-password for non-interactive creation
+            adduser --quiet --disabled-password --gecos "" "$username"
+        else
+            # Fallback to useradd
+            if [ "$create_home" = "yes" ]; then
+                useradd -m -s /bin/bash "$username"
+            else
+                useradd -s /bin/bash "$username"
+            fi
+        fi
+    fi
+    
+    # Add user to their own group
+    usermod -a -G "$username" "$username" 2>/dev/null || true
+    
+    return 0
+}
+
+# Enhanced package installation with better error handling
+install_packages_safe() {
+    local packages=("$@")
+    local confirmation=1
+    local filtered_packages=()
+    
+    # Filter out -y flag and collect packages
+    for package in "${packages[@]}"; do
+        if [ "$package" = "-y" ]; then
+            confirmation=0
+        else
+            filtered_packages+=("$package")
+        fi
+    done
+    
+    # Update package lists
+    apt-get update || {
+        echo "Warning: Failed to update package lists"
+        sleep 2
+        apt-get update || true
+    }
+    
+    # Install packages with error handling
+    if [ ${#filtered_packages[@]} -gt 0 ]; then
+        if [ $confirmation -eq 0 ]; then
+            DEBIAN_FRONTEND=noninteractive apt-get install -y "${filtered_packages[@]}"
+        else
+            echo "Installing packages: ${filtered_packages[*]}"
+            apt-get install "${filtered_packages[@]}"
+        fi
+    fi
+}
+
+# Enhanced repository validation that works across versions
+validate_repository_safe() {
+    local repo_url="$1"
+    
+    # Check multiple locations for repository definitions
+    if grep -r "^deb.*$repo_url" /etc/apt/sources.list /etc/apt/sources.list.d/ >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Enhanced GPG key handling
+add_gpg_key_safe() {
+    local key_url="$1"
+    local key_path="$2"
+    
+    # Try different methods to add GPG key
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$key_url" | gpg --dearmor -o "$key_path"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$key_url" | gpg --dearmor -o "$key_path"
+    else
+        echo "Neither curl nor wget available for downloading GPG key"
+        return 1
+    fi
+    
+    # Ensure proper permissions
+    chmod 644 "$key_path"
+    return 0
+}
+
+# PHP version compatibility check
+get_compatible_php_versions() {
+    get_os_info_enhanced
+    
+    case "$CURRENT_DISTRO_NAME:$CURRENT_DISTRO_VERSION" in
+        "Ubuntu:18.04")
+            echo "7.2 7.3 7.4 8.0 8.1 8.2"
+            ;;
+        "Ubuntu:20.04")
+            echo "7.4 8.0 8.1 8.2 8.3"
+            ;;
+        "Ubuntu:22.04"|"Ubuntu:24.04")
+            echo "8.0 8.1 8.2 8.3"
+            ;;
+        "Debian:11")
+            echo "7.4 8.0 8.1 8.2 8.3"
+            ;;
+        "Debian:12")
+            echo "8.1 8.2 8.3"
+            ;;
+        *)
+            echo "8.1 8.2 8.3"  # Default safe versions
+            ;;
+    esac
+}
+
+# MariaDB version compatibility
+get_compatible_mariadb_version() {
+    get_os_info_enhanced
+    
+    case "$CURRENT_DISTRO_NAME:$CURRENT_DISTRO_VERSION" in
+        "Ubuntu:18.04")
+            echo "10.3"
+            ;;
+        "Ubuntu:20.04")
+            echo "10.5"
+            ;;
+        "Ubuntu:22.04")
+            echo "10.6"
+            ;;
+        "Ubuntu:24.04")
+            echo "11.0"
+            ;;
+        "Debian:11")
+            echo "10.5"
+            ;;
+        "Debian:12")
+            echo "10.11"
+            ;;
+        *)
+            echo "10.6"  # Default safe version
+            ;;
+    esac
+}
+
+# Test if we're running in Docker or container
+is_container_environment() {
+    [ -f /.dockerenv ] || [ -n "${DOCKER_CONTAINER:-}" ] || [ -f /run/.containerenv ]
+}
+
+# Enhanced environment detection
+detect_environment() {
+    if is_container_environment; then
+        export LEMPTOOL_ENVIRONMENT="container"
+        echo "Container environment detected"
+    else
+        export LEMPTOOL_ENVIRONMENT="bare_metal"
+        echo "Bare metal environment detected"
+    fi
+}
+
+# Functions are automatically available when sourced - no need for explicit export

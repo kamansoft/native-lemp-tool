@@ -1,5 +1,10 @@
 #! /bin/bash 
 
+# Load compatibility helpers
+if [ -f "scripts/bash_helpers/compatibility" ]; then
+  source scripts/bash_helpers/compatibility
+fi
+
 
 
 
@@ -65,12 +70,15 @@ validate_installed_repo(){
 
 
 get_os_info(){
-	export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
-	export CURRENT_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
-#	export CURRENT_DISTRO_NAME="Doritos"
-#	export CURRENT_DISTRO_VERSION="Queso"
-
-	return 0	
+  # Use enhanced detection if available
+  if type get_os_info_enhanced >/dev/null 2>&1; then
+    get_os_info_enhanced
+  else
+    # Fallback to original method
+    export CURRENT_DISTRO_NAME="$(lsb_release -i | cut -f 2)"
+    export CURRENT_DISTRO_VERSION="$(lsb_release -c | cut -f 2)"
+  fi
+  return 0	
 }
 
 
@@ -148,6 +156,14 @@ validate_distro_version(){
 
 packages_installer(){
   validate_sudo
+  
+  # Use enhanced package installation if available
+  if type install_packages_safe >/dev/null 2>&1; then
+    install_packages_safe "$@"
+    return $?
+  fi
+  
+  # Fallback to original method
   CONFIRMATION=1
   PACKAGES=""
   # shellcheck disable=SC2068
@@ -174,7 +190,6 @@ packages_installer(){
     sudo apt install -y $PACKAGES
     return $?
   fi
-
 
 }
 

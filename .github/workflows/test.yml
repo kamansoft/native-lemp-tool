@@ -1,0 +1,46 @@
+name: Test Native LEMP Tool
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu18, ubuntu20, ubuntu22, ubuntu24, debian11, debian12]
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Make test script executable
+      run: chmod +x testing/docker-test.sh
+
+    - name: Build Docker image for ${{ matrix.os }}
+      run: ./testing/docker-test.sh build ${{ matrix.os }}
+
+    - name: Run basic tests on ${{ matrix.os }}
+      run: ./testing/docker-test.sh test ${{ matrix.os }}
+
+    - name: Run full installation test on Ubuntu 22.04
+      if: matrix.os == 'ubuntu22'
+      run: ./testing/docker-test.sh test ${{ matrix.os }} --full-install
+
+  test-summary:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "All tests completed. Check individual job results above." >> $GITHUB_STEP_SUMMARY

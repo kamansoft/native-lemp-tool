@@ -1,0 +1,41 @@
+FROM ubuntu:20.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install basic packages needed for testing
+RUN apt-get update && apt-get install -y \
+    sudo \
+    curl \
+    wget \
+    gnupg2 \
+    lsb-release \
+    ca-certificates \
+    software-properties-common \
+    systemd \
+    procps \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a test user with sudo privileges
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser:testpass" | chpasswd && \
+    usermod -aG sudo testuser && \
+    echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Set working directory
+WORKDIR /opt/native-lemp-tool
+
+# Copy the lemptool script and related files
+COPY . .
+
+# Make scripts executable
+RUN chmod +x lemptool && \
+    chmod +x testing/docker-test.sh 2>/dev/null || true
+
+# Switch to test user
+USER testuser
+
+# Default command
+CMD ["/bin/bash"]

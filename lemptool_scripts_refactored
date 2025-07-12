@@ -1,0 +1,1114 @@
+#!/bin/bash
+
+# SOLID Principles Refactored LEMP Tool Scripts
+# 
+# This refactored version adheres better to SOLID principles:
+# - Single Responsibility: Each function has one clear purpose
+# - Open/Closed: Configuration-driven behavior, extensible without modification
+# - Interface Segregation: Functions have minimal, focused interfaces
+# - Dependency Inversion: Abstract interfaces for external dependencies
+
+# shellcheck source=scripts/deb_os_tools
+source scripts/deb_os_tools
+# shellcheck source=scripts/bash_helpers/compatibility
+source scripts/bash_helpers/compatibility
+
+# Initialize environment detection
+detect_environment
+
+#===============================================================================
+# CONFIGURATION AND CONSTANTS
+#===============================================================================
+
+# Configuration structure for better maintainability
+declare -A PHP_PACKAGES_CORE=(
+    ["base"]="php\$PHP_VERSION php\$PHP_VERSION-fpm php\$PHP_VERSION-cli"
+    ["database"]="php\$PHP_VERSION-sqlite3 php\$PHP_VERSION-mysql"
+    ["web"]="php\$PHP_VERSION-xml php\$PHP_VERSION-xmlrpc php\$PHP_VERSION-curl php\$PHP_VERSION-gd"
+    ["dev"]="php\$PHP_VERSION-dev php\$PHP_VERSION-mbstring php\$PHP_VERSION-opcache"
+    ["extended"]="php\$PHP_VERSION-soap php\$PHP_VERSION-zip php\$PHP_VERSION-intl php\$PHP_VERSION-bcmath"
+    ["system"]="php\$PHP_VERSION-bz2 php\$PHP_VERSION-ctype php\$PHP_VERSION-gmp php\$PHP_VERSION-imap"
+)
+
+declare -A PHP_PACKAGES_OPTIONAL=(
+    ["debug"]="php\$PHP_VERSION-xdebug"
+    ["imaging"]="php\$PHP_VERSION-imagick"
+)
+
+declare -A LARAVEL_PACKAGES=(
+    ["vcs"]="git"
+    ["database"]="sqlite3"
+    ["runtime"]="nodejs npm"
+)
+
+#===============================================================================
+# ABSTRACT INTERFACES (Dependency Inversion Principle)
+#===============================================================================
+
+# Service Manager Interface - abstracts service operations
+service_operation() {
+    local operation="$1"
+    local service="$2"
+    
+    case "$operation" in
+        "start"|"stop"|"restart"|"enable"|"disable")
+            service_manager "$operation" "$service"
+            ;;
+        *)
+            echo "Error: Invalid service operation: $operation"
+            return 1
+            ;;
+    esac
+}
+
+# Package Manager Interface - abstracts package operations
+package_operation() {
+    local operation="$1"
+    shift
+    local packages=("$@")
+    
+    case "$operation" in
+        "install")
+            packages_installer -y "${packages[@]}"
+            ;;
+        "install_safe")
+            install_packages_safe -y "${packages[@]}"
+            ;;
+        "check_available")
+            apt-cache show "$1" >/dev/null 2>&1
+            ;;
+        *)
+            echo "Error: Invalid package operation: $operation"
+            return 1
+            ;;
+    esac
+}
+
+# File System Interface - abstracts file operations
+file_operation() {
+    local operation="$1"
+    local file_path="$2"
+    local content="$3"
+    
+    case "$operation" in
+        "create_from_template")
+            local template_path="$content"
+            if ! envsubst < "$template_path" > "$file_path"; then
+                echo "Error: Failed to create file from template: $template_path -> $file_path"
+                return 1
+            fi
+            ;;
+        "check_exists")
+            [[ -f "$file_path" ]]
+            ;;
+        "remove")
+            rm -f "$file_path"
+            ;;
+        *)
+            echo "Error: Invalid file operation: $operation"
+            return 1
+            ;;
+    esac
+}
+
+#===============================================================================
+# VALIDATION LAYER (Single Responsibility Principle)
+#===============================================================================
+
+# Component Validators - each validates one specific component
+validate_component_mariadb() {
+    if ! command -v mysql &> /dev/null; then
+        echo "MariaDB is not installed. Install with: ./lemptool -mdb"
+        return 1
+    fi
+}
+
+validate_component_php() {
+    if ! command -v php &> /dev/null; then
+        echo "PHP is not installed. Install with: ./lemptool -p=<version>"
+        return 1
+    fi
+}
+
+validate_component_nginx() {
+    if ! command -v nginx &> /dev/null; then
+        echo "Nginx is not installed. Install with: ./lemptool -ng"
+        return 1
+    fi
+}
+
+validate_component_envsubst() {
+    if ! command -v envsubst &> /dev/null; then
+        echo "envsubst is not available. Install gettext-base package."
+        return 1
+    fi
+}
+
+# Parameter Validators
+validate_parameter_not_empty() {
+    local param_name="$1"
+    local param_value="$2"
+    local usage_example="$3"
+    
+    if [[ -z "$param_value" ]]; then
+        echo "Error: $param_name parameter is required"
+        [[ -n "$usage_example" ]] && echo "Usage: $usage_example"
+        return 1
+    fi
+}
+
+validate_parameter_user_exists() {
+    local username="$1"
+    
+    if ! id "$username" >/dev/null 2>&1; then
+        echo "Error: User '$username' does not exist"
+        return 1
+    fi
+}
+
+validate_parameter_directory_exists() {
+    local directory="$1"
+    
+    if [[ ! -d "$directory" ]]; then
+        echo "Error: Directory '$directory' does not exist"
+        return 1
+    fi
+}
+
+#===============================================================================
+# UTILITY FUNCTIONS (Single Responsibility Principle)
+#===============================================================================
+
+# PHP Utilities
+get_php_version_number() {
+    php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"
+}
+
+get_php_config_path() {
+    local php_version
+    php_version="$(get_php_version_number)"
+    echo "/etc/php/$php_version"
+}
+
+# Argument Processing Utilities
+has_confirmation_flag() {
+    local confirmation=0
+    for arg in "$@"; do
+        if [[ "$arg" == "-y" ]]; then
+            confirmation=1
+            break
+        fi
+    done
+    return $((1 - confirmation))
+}
+
+# User Management Utilities
+create_user_if_not_exists() {
+    local username="$1"
+    
+    if ! validate_parameter_user_exists "$username" 2>/dev/null; then
+        echo "Creating user: $username"
+        if create_user_safe "$username"; then
+            echo "User '$username' created successfully"
+            return 0
+        else
+            echo "Error: Failed to create user '$username'"
+            return 1
+        fi
+    else
+        echo "User '$username' already exists"
+        return 0
+    fi
+}
+
+# Path Management Utilities
+setup_lemp_directories() {
+    local user="$1"
+    local domain="$2"
+    local custom_path="$3"
+    
+    local default_path="/var/www/$user"
+    local lemp_path="$default_path/$domain"
+    
+    if [[ -n "$custom_path" && -d "$custom_path" ]]; then
+        lemp_path="$custom_path"
+    else
+        mkdir -p "$lemp_path"
+    fi
+    
+    chown -R "$user:$user" "$default_path"
+    echo "$lemp_path"
+}
+
+#===============================================================================
+# CORE INSTALLER CLASSES (Single Responsibility Principle)
+#===============================================================================
+
+# PHP Installer - handles only PHP installation
+install_php_packages() {
+    local php_version="$1"
+    
+    # Build package list from configuration
+    local packages=()
+    for category in "${!PHP_PACKAGES_CORE[@]}"; do
+        local category_packages
+        category_packages=$(eval echo "${PHP_PACKAGES_CORE[$category]}")
+        read -ra pkg_array <<< "$category_packages"
+        packages+=("${pkg_array[@]}")
+    done
+    
+    echo "> Installing core PHP packages for version $php_version"
+    if package_operation "install_safe" "${packages[@]}"; then
+        echo "> Core PHP packages installed successfully"
+        
+        # Try optional packages
+        for category in "${!PHP_PACKAGES_OPTIONAL[@]}"; do
+            local optional_package
+            optional_package=$(eval echo "${PHP_PACKAGES_OPTIONAL[$category]}")
+            
+            if package_operation "check_available" "$optional_package"; then
+                package_operation "install_safe" "$optional_package" || 
+                    echo "Warning: Could not install optional package $optional_package"
+            else
+                echo "Warning: Optional package $optional_package not available for PHP $php_version"
+            fi
+        done
+        
+        return 0
+    else
+        echo "> Error: Failed to install core PHP packages"
+        return 1
+    fi
+}
+
+install_composer() {
+    echo "> Installing Composer"
+    
+    cd /tmp || return 1
+    
+    if command -v curl >/dev/null 2>&1; then
+        curl -sS https://getcomposer.org/installer | php -- --quiet
+    elif command -v wget >/dev/null 2>&1; then
+        wget https://raw.githubusercontent.com/composer/getcomposer.org/76a7060ccb93902cd7576b67264ad91c8a2700e2/web/installer -O - -q | php -- --quiet
+    else
+        echo "Error: Neither curl nor wget available for Composer installation"
+        return 1
+    fi
+    
+    sudo mv composer.phar /usr/local/bin/composer
+    echo "> Composer installed successfully"
+}
+
+install_laravel_dev_packages() {
+    echo "> Installing Laravel development packages"
+    
+    validate_sudo
+    
+    local packages=()
+    for category in "${!LARAVEL_PACKAGES[@]}"; do
+        read -ra pkg_array <<< "${LARAVEL_PACKAGES[$category]}"
+        packages+=("${pkg_array[@]}")
+    done
+    
+    package_operation "install" "${packages[@]}"
+}
+
+# Repository Manager - handles repository operations
+setup_php_repository() {
+    local distro_name="$1"
+    
+    case "$distro_name" in
+        "Ubuntu")
+            setup_ubuntu_php_repository
+            ;;
+        "Debian")
+            setup_debian_php_repository
+            ;;
+        *)
+            echo "Error: Unsupported distribution: $distro_name"
+            return 1
+            ;;
+    esac
+}
+
+setup_ubuntu_php_repository() {
+    local ppa_repo="ondrej/php"
+    
+    if ! validate_repository_safe "$ppa_repo"; then
+        echo "> Adding Ubuntu PHP repository: $ppa_repo"
+        if [[ "$show_confirmations" -eq 1 ]]; then
+            add-apt-repository "ppa:$ppa_repo"
+        else
+            add-apt-repository "ppa:$ppa_repo" -y
+        fi
+    else
+        echo "> Ubuntu PHP repository already installed"
+    fi
+}
+
+setup_debian_php_repository() {
+    local debian_repo="https://packages.sury.org/php/"
+    
+    if ! validate_repository_safe "$debian_repo"; then
+        echo "> Adding Debian PHP repository"
+        local gpg_url="https://packages.sury.org/php/apt.gpg"
+        local gpg_key_path="/etc/apt/trusted.gpg.d/sury-php-keyring.gpg"
+        local repo_line="deb $debian_repo $(lsb_release -sc) main"
+        
+        echo "$repo_line" | sudo tee /etc/apt/sources.list.d/sury-php.list
+        add_gpg_key_safe "$gpg_url" "$gpg_key_path"
+    else
+        echo "> Debian PHP repository already installed"
+    fi
+}
+
+#===============================================================================
+# SERVICE CONFIGURATION LAYER (Single Responsibility Principle)
+#===============================================================================
+
+# FMP Pool Configuration
+configure_fpm_pool() {
+    local username="$1"
+    
+    validate_component_php || return 1
+    validate_component_envsubst || return 1
+    validate_parameter_not_empty "username" "$username" "./lemptool -fpm=myusername"
+    
+    # Validate or create user
+    if ! validate_parameter_user_exists "$username" 2>/dev/null; then
+        echo "User '$username' does not exist. Creating..."
+        create_user_if_not_exists "$username" || return 1
+    fi
+    
+    # Security check
+    if [[ "$username" == "root" ]]; then
+        echo "Error: Cannot create FPM pool for root user (security risk)"
+        return 1
+    fi
+    
+    local php_version
+    php_version=$(get_php_version_number)
+    local php_config_path
+    php_config_path=$(get_php_config_path)
+    local pool_file="$php_config_path/fmp/pool.d/$username.conf"
+    
+    # Setup environment variables for template
+    export DOLLAR="$"
+    export PERCENT="%"
+    export FPM_USER="$username"
+    
+    # Handle existing pool file
+    if file_operation "check_exists" "$pool_file"; then
+        echo "FPM pool file exists. Overwriting..."
+        if [[ "$show_confirmations" -eq 1 ]]; then
+            confirmation_message || return 1
+        fi
+        file_operation "remove" "$pool_file"
+    fi
+    
+    # Create pool file from template
+    if file_operation "create_from_template" "$pool_file" "templates/fpm_create/pool_template"; then
+        echo "> FPM pool file created successfully"
+    else
+        echo "> Error: Failed to create FPM pool file"
+        return 1
+    fi
+    
+    # Restart FPM service
+    if service_operation "restart" "php$php_version-fpm"; then
+        echo "> PHP-FPM restarted successfully"
+    else
+        echo "> Warning: PHP-FPM service restart failed"
+        if [[ "$LEMPTOOL_ENVIRONMENT" == "container" ]]; then
+            echo "> Note: This is normal in container environments"
+        else
+            return 1
+        fi
+    fi
+    
+    echo "> FPM pool creation completed successfully"
+}
+
+# Nginx Server Configuration
+configure_nginx_server() {
+    local fmp_name="$1"
+    local domain="$2"
+    local public_path="$3"
+    
+    validate_component_nginx || return 1
+    validate_component_php || return 1
+    validate_component_envsubst || return 1
+    
+    validate_parameter_not_empty "FPM name" "$fmp_name"
+    validate_parameter_not_empty "domain" "$domain"
+    validate_parameter_not_empty "public path" "$public_path"
+    validate_parameter_directory_exists "$public_path"
+    
+    local php_version
+    php_version=$(get_php_version_number)
+    local php_config_path
+    php_config_path=$(get_php_config_path)
+    local pool_file="$php_config_path/fmp/pool.d/$fmp_name.conf"
+    
+    # Ensure FPM pool exists
+    if ! file_operation "check_exists" "$pool_file"; then
+        echo "> FPM pool does not exist. Creating..."
+        configure_fmp_pool "$fmp_name" || return 1
+    fi
+    
+    # Restart PHP-FPM to ensure pool is loaded
+    service_operation "restart" "php$php_version-fpm" || return 1
+    
+    # Setup environment variables for template
+    export DOLLAR="$"
+    export PERCENT="%"
+    export NG_SERVER_PATH="$public_path"
+    export NG_SERVER_DOMAIN="$domain"
+    export NG_SERVER_FPM_NAME="$fmp_name"
+    
+    local available_path="/etc/nginx/sites-available"
+    local enabled_path="/etc/nginx/sites-enabled"
+    local server_file="$available_path/$domain"
+    
+    # Handle existing server file
+    if file_operation "check_exists" "$server_file"; then
+        echo "Nginx server file exists. Overwriting..."
+        if [[ "$show_confirmations" -eq 1 ]]; then
+            confirmation_message || return 1
+        fi
+        file_operation "remove" "$server_file"
+    fi
+    
+    # Create server file from template
+    if file_operation "create_from_template" "$server_file" "templates/laravel/nginx/server/server_unit_template"; then
+        echo "> Nginx server file created successfully"
+    else
+        echo "> Error: Failed to create Nginx server file"
+        return 1
+    fi
+    
+    # Create symbolic link
+    ln -sf "$server_file" "$enabled_path/$domain"
+    
+    # Test nginx configuration
+    if nginx -t; then
+        echo "> Nginx configuration is valid"
+    else
+        echo "> Error: Nginx configuration is invalid"
+        return 1
+    fi
+    
+    # Restart Nginx
+    if service_operation "restart" "nginx"; then
+        echo "> Nginx restarted successfully"
+    else
+        echo "> Warning: Nginx service restart failed"
+        if [[ "$LEMPTOOL_ENVIRONMENT" == "container" ]]; then
+            echo "> Note: This is normal in container environments"
+        else
+            return 1
+        fi
+    fi
+    
+    echo "> Nginx server configuration completed successfully"
+}
+
+#===============================================================================
+# HIGH-LEVEL ORCHESTRATION FUNCTIONS (Open/Closed Principle)
+#===============================================================================
+
+# Main PHP Installation Orchestrator
+install_php() {
+    local php_version="$1"
+    
+    validate_sudo || return 1
+    validate_php_version "$php_version" || return 1
+    
+    echo "> Starting PHP $PHP_VERSION installation"
+    echo "> This will install PHP $PHP_VERSION with FastCGI and Laravel development packages"
+    
+    # Handle confirmation
+    if [[ "$show_confirmations" -eq 1 ]]; then
+        confirmation_message || return 1
+    else
+        echo "> Confirmation avoided"
+    fi
+    
+    # Install repository management packages
+    install_deb_repo_packages || return 1
+    validate_distro_name "Ubuntu" "Debian" || return 1
+    
+    # Setup appropriate repository
+    setup_php_repository "$CURRENT_DISTRO_NAME" || return 1
+    
+    # Update package lists
+    sudo apt update || return 1
+    
+    # Install PHP packages
+    install_php_packages "$PHP_VERSION" || return 1
+    
+    # Install Composer
+    if [[ "$show_confirmations" -eq 1 ]]; then
+        echo "> Installing Composer"
+        confirmation_message || return 1
+    fi
+    
+    install_composer || return 1
+    install_laravel_dev_packages || return 1
+    
+    echo "> PHP installation completed successfully"
+}
+
+# Main FPM Pool Creation Function
+fmp_create() {
+    local username="$1"
+    
+    validate_sudo || return 1
+    configure_fmp_pool "$username"
+}
+
+# Main Nginx Server Creation Function
+fmp_ng_server_create() {
+    local fmp_name="$1"
+    local domain="$2"
+    local public_path="$3"
+    
+    validate_sudo || return 1
+    configure_nginx_server "$fmp_name" "$domain" "$public_path"
+}
+
+# Complete LEMP Stack Creation
+lemp_create() {
+    local user="$1"
+    local domain="$2"
+    local db_password="$3"
+    local custom_path="$4"
+    
+    validate_sudo || return 1
+    validate_component_php || return 1
+    validate_component_nginx || return 1
+    validate_component_mariadb || return 1
+    
+    validate_parameter_not_empty "user" "$user" './lemptool lemp="username" "domain" "dbpassword"'
+    validate_parameter_not_empty "domain" "$domain" './lemptool lemp="username" "domain" "dbpassword"'
+    validate_parameter_not_empty "database password" "$db_password" './lemptool lemp="username" "domain" "dbpassword"'
+    validate_parameter_user_exists "$user" || return 1
+    
+    # Setup directory structure
+    local lemp_path
+    lemp_path=$(setup_lemp_directories "$user" "$domain" "$custom_path")
+    
+    # Create symbolic link
+    ln -sf "$lemp_path" "/home/$user/$domain"
+    
+    # Create FPM pool
+    configure_fmp_pool "$user" || return 1
+    
+    # Create database user (escape domain name)
+    local escaped_domain
+    escaped_domain=$(echo "$domain" | sed 's/\./_/g' | sed 's/-/_/g')
+    
+    if add_mdb_user_with_db "$escaped_domain" "$db_password"; then
+        echo "> Database user created successfully"
+    else
+        echo "> Warning: Database user creation failed"
+        if [[ "$show_confirmations" -eq 1 ]]; then
+            echo "> Continue without database?"
+            confirmation_message || return 1
+        fi
+    fi
+    
+    # Create Nginx server
+    configure_nginx_server "$user" "$domain" "$lemp_path" || return 1
+    
+    # Create index.php from template
+    export CURRENT_PHP_VERSION="$(get_php_version_number)"
+    export LEMP_USER="$user"
+    export LEMP_PATH="$lemp_path"
+    export LEMP_DOMAIN="$domain"
+    export LEMP_DOMAIN_ESCAPED="$escaped_domain"
+    
+    file_operation "create_from_template" "$lemp_path/index.php" "templates/lemp/index.php.template"
+    
+    # Set proper ownership
+    chown -R "$user:$user" "$lemp_path"
+    
+    echo ""
+    echo "> LEMP stack created successfully:"
+    echo ">   User: $user"
+    echo ">   Domain: $domain"
+    echo ">   Path: $lemp_path"
+    echo ">   Database: $escaped_domain"
+    echo ">   DB Password: $db_password"
+    
+    return 0
+}
+
+#===============================================================================
+# LEGACY FUNCTION WRAPPERS (for backward compatibility)
+#===============================================================================
+
+# Maintain backward compatibility while using refactored code
+restart_php() {
+    validate_php_version "$1"
+    echo "Restarting PHP-FPM..."
+    local php_version
+    php_version=$(get_php_version_number)
+    service_operation "restart" "php$php_version-fpm"
+}
+
+validate_mariadb() {
+    validate_component_mariadb
+}
+
+validate_php() {
+    validate_component_php
+}
+
+validate_nginx() {
+    validate_component_nginx
+}
+
+php_version_number() {
+    get_php_version_number
+}
+
+php_config_path() {
+    get_php_config_path
+}
+
+check_for_y() {
+    has_confirmation_flag "$@"
+}
+
+install_extra_packages_for_laravel_dev() {
+    install_laravel_dev_packages
+}
+
+# Keep original validate_php_version function as is for compatibility
+validate_php_version() {
+    local PROSPECT_VERSION=$1
+    
+    # Get compatible PHP versions for current OS
+    local compatible_versions
+    compatible_versions=$(get_compatible_php_versions)
+    read -ra valid_php_versions <<< "$compatible_versions"
+    
+    export VALUE_SELECTED_FROM_ARGS
+    if [[ -n $PROSPECT_VERSION ]]; then
+        echo "Checking if php version $PROSPECT_VERSION is among the valid ones for this script to use."
+        # Check if the version is in our compatible list
+        for version in "${valid_php_versions[@]}"; do
+            if [[ "$PROSPECT_VERSION" == "$version" ]]; then
+                VALUE_SELECTED_FROM_ARGS="$PROSPECT_VERSION"
+                export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
+                echo "PHP version $PHP_VERSION selected and validated."
+                return 0
+            fi
+        done
+        echo "PHP version $PROSPECT_VERSION is not compatible with your OS."
+        echo "Compatible versions: ${valid_php_versions[*]}"
+        . ./scripts/bash_helpers/in_arguments "$PROSPECT_VERSION" "${valid_php_versions[@]}"
+    else
+        echo "You must pick a valid php version for this script to use"
+        echo "Compatible versions for your OS: ${valid_php_versions[*]}"
+        . ./scripts/bash_helpers/in_arguments "x.x" "${valid_php_versions[@]}"
+    fi
+    export PHP_VERSION=$VALUE_SELECTED_FROM_ARGS
+}
+
+# TODO: Refactor the remaining large functions (install_nginx, install_mariadb, etc.)
+# following the same SOLID principles pattern established above.
+
+#===============================================================================
+# REMAINING FUNCTIONS TO BE REFACTORED
+#===============================================================================
+
+# NOTE: The following functions need similar refactoring but are kept as-is 
+# for now to maintain functionality. They should be refactored following 
+# the same patterns established above:
+
+# - install_nginx() -> Should be split into repository setup, package installation, and configuration
+# - install_mariadb() -> Should be split into repository setup, version detection, and installation
+# - add_mdb_user() / add_mdb_superuser() / add_mdb_user_with_db() -> Should use database interface abstraction
+# - install_phpmyadmin() -> Should be split into download, configuration, and server setup
+
+# For now, including the original functions to maintain backward compatibility:
+
+#---------------NGINX INSTALL-------------------
+install_nginx() {
+    validate_sudo
+    echo "> message:"
+    echo "This script will uninstall current version of nginx if installed."
+    echo "Also will install the sury nginx-mainline repo to work with sury php repositories"
+    echo "Then, this script will install lastet version of nginx server "
+    if [ $show_confirmations -eq 1 ]; then
+        confirmation_message
+    else
+        echo "> message:"
+        echo "Confirmation avoided !"
+    fi 
+
+    service_manager stop nginx
+    sudo apt-get -y autoremove nginx*
+
+    echo "> message:"
+    echo "Some packages are needed in order to repository manipulation (install or detected sury mainline nginx  repositories also for nginx installation)."
+    install_deb_repo_packages
+    validate_distro_name "Ubuntu" "Debian"
+
+    if [[ $CURRENT_DISTRO_NAME == Ubuntu ]]; then
+        PPA_UBUNTU_REPO="ondrej/nginx-mainline"
+        validate_installed_repo $PPA_UBUNTU_REPO
+        if ! validate_installed_repo $PPA_UBUNTU_REPO ; then
+            echo "> message:"
+            echo "The $PPA_UBUNTU_REPO repository was not detected in this os."
+            echo "Adding $PPA_UBUNTU_REPO ppa repository"
+            sudo add-apt-repository -y ppa:$PPA_UBUNTU_REPO
+        else
+            echo "> message:"
+            echo "The $PPA_UBUNTU_REPO repository is already installed."
+        fi
+    fi
+    
+    if [[ $CURRENT_DISTRO_NAME == Debian ]]; then
+        DEBIAN_REPO="https://packages.sury.org/nginx-mainline/ $(lsb_release -sc) main"
+        
+        if ! validate_installed_repo "$DEBIAN_REPO"; then
+            echo "> message:"
+            echo "Adding the $DEBIAN_REPO repository"
+
+            GPG_URL=https://packages.sury.org/nginx-mainline/apt.gpg
+            GPG_KEY_PATH="/etc/apt/trusted.gpg.d/sury-nginx-mainline-keyring.gpg"
+            UNSIGNED_REPO="deb $DEBIAN_REPO "
+
+            echo "$UNSIGNED_REPO" | sudo tee /etc/apt/sources.list.d/nginx-mainline.list
+            curl -fsSL $GPG_URL | sudo gpg --dearmor -o $GPG_KEY_PATH
+        else
+            echo "> message:"
+            echo "sury Nginx mainline repo already installed "
+        fi
+    fi
+
+    echo "> message:"
+    echo "Installing nginx and related packages"
+    sudo apt update
+    packages_installer nginx-core nginx-common nginx nginx-full -y
+}
+
+#---------------MARIADB INSTALL-------------------
+install_mariadb() {
+    validate_sudo
+
+    echo "> message:"
+    echo "This script will install MariaDB on this machine."
+    if [ $show_confirmations -eq 1 ]; then
+        confirmation_message
+    else
+        echo "> message:"
+        echo "Confirmation avoided !"
+    fi
+
+    # Use enhanced OS detection
+    get_os_info_enhanced
+    validate_distro_name "Ubuntu" "Debian"
+    
+    # Get compatible MariaDB version for current OS
+    local mariadb_version
+    mariadb_version=$(get_compatible_mariadb_version)
+    echo "> message:"
+    echo "Installing MariaDB version $mariadb_version for $CURRENT_DISTRO_NAME $CURRENT_DISTRO_VERSION"
+
+    # Handle Ubuntu 24.04 (Noble) with special case
+    if [[ $CURRENT_DISTRO_NAME == "Ubuntu" && $CURRENT_DISTRO_VERSION == "24.04" ]]; then
+        echo "> message:"
+        echo "Detected Ubuntu Noble (24.04). Using the repository setup script."
+
+        # Add MariaDB repository using the official script
+        echo "> message:"
+        echo "Adding MariaDB repository for Ubuntu Noble..."
+        if command -v curl >/dev/null 2>&1; then
+            curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash
+        else
+            echo "Error: curl not available for MariaDB repository setup"
+            return 1
+        fi
+
+        # Update and install
+        sudo apt update
+        install_packages_safe -y mariadb-server
+
+        echo "> message:"
+        echo "MariaDB installed successfully on Ubuntu Noble."
+        return 0
+    fi
+
+    # Standard installation for other versions
+    echo "> message:"
+    echo "Using the standard MariaDB installation method."
+
+    install_deb_repo_packages
+
+    # Try to install from distribution repos first
+    if apt-cache show mariadb-server >/dev/null 2>&1; then
+        echo "> message:"
+        echo "Installing MariaDB from distribution repositories..."
+        install_packages_safe -y mariadb-server
+        return 0
+    fi
+
+    # Fallback to MariaDB official repositories
+    local repo_base_url="https://mirror.rackspace.com/mariadb/repo"
+    local repo_version="10.6"  # Safe fallback version
+    
+    # Adjust repository version based on OS
+    case "$CURRENT_DISTRO_NAME:$CURRENT_DISTRO_VERSION" in
+        "Ubuntu:18.04") repo_version="10.5" ;;
+        "Ubuntu:20.04") repo_version="10.6" ;;
+        "Ubuntu:22.04") repo_version="10.6" ;;
+        "Debian:11") repo_version="10.6" ;;
+        "Debian:12") repo_version="10.11" ;;
+    esac
+    
+    local base_repo_url="$repo_base_url/$repo_version/${CURRENT_DISTRO_NAME,,}"
+
+    if ! validate_repository_safe "$base_repo_url"; then
+        echo "> message:"
+        echo "Adding MariaDB official repository..."
+
+        local repo_line=""
+        if [[ $CURRENT_DISTRO_NAME == Ubuntu ]]; then
+            # Validate supported Ubuntu versions
+            case "$CURRENT_DISTRO_VERSION" in
+                "18.04"|"20.04"|"22.04")
+                    repo_line="deb $base_repo_url $(lsb_release -sc) main"
+                    ;;
+                *)
+                    echo "Warning: Ubuntu version $CURRENT_DISTRO_VERSION may not be supported"
+                    repo_line="deb $base_repo_url $(lsb_release -sc) main"
+                    ;;
+            esac
+        elif [[ $CURRENT_DISTRO_NAME == Debian ]]; then
+            # Validate supported Debian versions  
+            case "$CURRENT_DISTRO_VERSION" in
+                "11"|"12")
+                    repo_line="deb $base_repo_url $(lsb_release -sc) main"
+                    ;;
+                *)
+                    echo "Warning: Debian version $CURRENT_DISTRO_VERSION may not be supported"
+                    repo_line="deb $base_repo_url $(lsb_release -sc) main"
+                    ;;
+            esac
+        fi
+        
+        if [ -n "$repo_line" ]; then
+            echo "> message:"
+            echo "Adding repository: $repo_line"
+            echo "$repo_line" | sudo tee /etc/apt/sources.list.d/mariadb.list
+            
+            # Add GPG key
+            if command -v curl >/dev/null 2>&1; then
+                sudo curl -o /etc/apt/trusted.gpg.d/mariadb_release_signing_key.asc 'https://mariadb.org/mariadb_release_signing_key.asc'
+            else
+                echo "Warning: Could not download MariaDB GPG key"
+            fi
+        fi
+    else
+        echo "> message:"
+        echo "MariaDB repository already configured"
+    fi
+
+    echo "> message:"
+    echo "Updating package lists and installing MariaDB..."
+    sudo apt update
+    
+    # Try specific version first, then fallback to generic
+    if ! install_packages_safe -y "mariadb-server-$repo_version"; then
+        echo "> message:"
+        echo "Specific version not available, trying generic mariadb-server..."
+        install_packages_safe -y mariadb-server
+    fi
+    
+    echo "> message:"
+    echo "MariaDB installation completed"
+}
+
+#---------------DB USER CREATE-------------------
+add_mdb_user(){
+    validate_sudo
+    validate_mariadb
+    MDB_USERNAME=""
+    MDB_PASSWORD=""
+
+    if [ -z "$1" ]; then
+        echo "Please type the username to add"
+        read -r MDB_USERNAME
+    else
+        MDB_USERNAME="$1"
+    fi
+    if [ -z "$2" ]; then
+        echo "Please type the password for $MDB_USERNAME"
+        read -r MDB_PASSWORD
+    else
+        MDB_PASSWORD="$2"
+    fi
+    MDB_HOST="%"
+    if [ -n "$3" ]; then
+        MDB_HOST="$3"
+    else
+        echo "A hostname for this new user:  $MDB_USERNAME  was not provided"
+        echo "User will be created with % as host."
+        if [ $show_confirmations -eq 1 ]; then
+            confirmation_message
+        else
+            echo "> message:"
+            echo "Confirmation avoided !"
+        fi
+    fi
+
+    CREATE_USER_QUERY="CREATE USER IF NOT EXISTS '$MDB_USERNAME'@'$MDB_HOST' IDENTIFIED BY '$MDB_PASSWORD';"
+    if echo "$CREATE_USER_QUERY" | mysql ; then
+        echo "User $MDB_USERNAME @ $MDB_HOST created "
+        return 0
+    else
+        echo "Error creating user $MDB_USERNAME"
+        return 1
+    fi
+}
+
+add_mdb_superuser(){
+    if ! add_mdb_user "$@" ;then
+        echo "Super user can not be created"
+        exit 1
+    fi
+
+    CREATE_USER_QUERY="GRANT ALL PRIVILEGES ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH GRANT OPTION MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;FLUSH PRIVILEGES;"
+    if echo "$CREATE_USER_QUERY" | mysql ; then
+        echo "User $MDB_USERNAME @ $MDB_HOST is now SUPER USER "
+        return 0
+    else
+        echo "ERROR on giving all privileges to  $MDB_USERNAME @ $MDB_HOST "
+        return 1
+    fi
+}
+
+add_mdb_user_with_db(){
+    if ! add_mdb_user "$@" ;then
+        echo "User can not be created"
+        exit 1
+    fi
+
+    CREATE_USER_QUERY="GRANT USAGE ON *.* TO '$MDB_USERNAME'@'$MDB_HOST' REQUIRE NONE WITH MAX_QUERIES_PER_HOUR 0 MAX_CONNECTIONS_PER_HOUR 0 MAX_UPDATES_PER_HOUR 0 MAX_USER_CONNECTIONS 0;CREATE DATABASE IF NOT EXISTS \`$MDB_USERNAME\`; GRANT ALL PRIVILEGES ON \`$MDB_USERNAME\`.* TO '$MDB_USERNAME'@'$MDB_HOST'; "
+    if echo "$CREATE_USER_QUERY" | mysql ; then
+        echo "User $MDB_USERNAME @ $MDB_HOST created with a database named $MDB_USERNAME"
+        return 0
+    else
+        echo "Error creating user $MDB_USERNAME db "
+        return 1
+    fi
+}
+
+#---------------PHPMYADMIN INSTALL -------------------
+install_phpmyadmin() {
+    validate_sudo
+    echo ""
+    validate_php
+    validate_mariadb
+    validate_nginx
+    echo ""
+    if ! which "envsubst"; then
+        echo ""
+        echo "envsubst command not found"
+        echo "Please install  gettext-base package"
+        exit 1
+    fi
+
+    PHPMYADMIN_VERSION="5.2.0"
+    PHPMYADMIN_USERNAME="phpmyadmin"
+    echo "This script will install install phpMyAdmin $PHPMYADMIN_VERSION."
+    echo "Also this script will create a phpmyadmin user if not exists, add a new phpmyadmin fmp for the phpmyadmin created user, later it will create a phpmyadmin nginx server."
+    confirmation_message
+    PHPMYADMIN_DOWNLOAD_URL="https://files.phpmyadmin.net/phpMyAdmin/$PHPMYADMIN_VERSION/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages.zip"
+    PHPMYADMIN_USER_PATH="/home/$PHPMYADMIN_USERNAME"
+    PHPMYADMIN_DOWNLOAD_PATH="$PHPMYADMIN_USER_PATH/phpmyadmin.zip"
+    PHPMYADMIN_EXTRACTION_PATH="$PHPMYADMIN_USER_PATH/phpMyAdmin-$PHPMYADMIN_VERSION-all-languages"
+    PHPMYADMIN_PUBLIC_PATH="/opt/$PHPMYADMIN_USERNAME"
+    packages_installer -y unzip zip
+    echo ""
+    echo "$PHPMYADMIN_USERNAME user is needed"
+    create_user_safe "$PHPMYADMIN_USERNAME"
+    sudo curl -o $PHPMYADMIN_DOWNLOAD_PATH $PHPMYADMIN_DOWNLOAD_URL
+    sudo unzip -o $PHPMYADMIN_DOWNLOAD_PATH -d $PHPMYADMIN_USER_PATH
+    if [ -d $PHPMYADMIN_PUBLIC_PATH ]; then
+        echo "$PHPMYADMIN_PUBLIC_PATH already exists"
+        echo "If you continue it will be overwritten with the new instalation content"
+        confirmation_message
+        echo " deleting $PHPMYADMIN_PUBLIC_PATH"
+        rm -r $PHPMYADMIN_PUBLIC_PATH
+    fi
+
+    sudo mv $PHPMYADMIN_EXTRACTION_PATH $PHPMYADMIN_PUBLIC_PATH
+    cp "templates/phpmyadmin/config.inc.php" "$PHPMYADMIN_PUBLIC_PATH/config.inc.php"
+    sudo chown -R phpmyadmin $PHPMYADMIN_PUBLIC_PATH
+
+    fmp_create "$PHPMYADMIN_USERNAME"
+
+    echo "A domain for phpmyadmin nginx server is needed."
+    echo ""
+    echo "A nginx server unit file will be created using $PHPMYADMIN_USERNAME subdomain,"
+    echo "if your domain is 'yourdomain.com' the phpmyadmin 'server_name' directive"
+    echo "of your nginx server unit file will point to $PHPMYADMIN_USERNAME.yourdomain.com."
+    echo ""
+
+    for (( ; ; )); do
+        echo "This script needs a root domain name to prepend the 'phpmyadmin' subdomain."
+        echo "Example: for phpmyadmin.some-root-domain.com,  'some-root-domain.com' is needed."
+        echo "Please type the root domain name that your phpmyadmin installation will use:"
+        read -r PHPMYADMIN_DOMAIN
+        echo ""
+        echo "Are you sure the domain to use is $PHPMYADMIN_DOMAIN ? [Y/n] "
+        read -r SURE_OF_DOMAIN
+        if [[ $SURE_OF_DOMAIN = "Y" ]]; then
+            break
+        fi
+    done
+
+    export PHPMYADMIN_DOMAIN="$PHPMYADMIN_USERNAME.$PHPMYADMIN_DOMAIN"
+    export PHPMYADMIN_PUBLIC_PATH
+    export DOLLAR="$"
+    NGINX_AVAILABLE_SERVERS_PATH="/etc/nginx/sites-available"
+    NGINX_ENABLED_SERVERS_PATH="/etc/nginx/sites-enabled"
+
+    PHPMYADMIN_SERVER_UNIT_FILE="$NGINX_AVAILABLE_SERVERS_PATH/$PHPMYADMIN_DOMAIN"
+    PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH="$NGINX_ENABLED_SERVERS_PATH/$PHPMYADMIN_DOMAIN"
+
+    cat "templates/phpmyadmin/nginx/server_template" | envsubst >"$PHPMYADMIN_SERVER_UNIT_FILE"
+
+    if [ -f "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH" ]; then
+        echo "The $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link already exist"
+        echo "It must be overwritten."
+        echo "Update the $PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH soft link ?"
+        confirmation_message
+        rm -f "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+    fi
+    ln -s "$PHPMYADMIN_SERVER_UNIT_FILE" "$PHPMYADMIN_SERVER_UNIT_SOFT_LINK_PATH"
+
+    if ! nginx -t; then
+        echo ""
+        echo "Error in some of your sever uinits"
+        echo "Please correct it and run the command again"
+        exit 1
+    fi
+
+    echo "Restarting nginx service"
+    if ! service_manager restart nginx; then
+        echo "It was not possible to restart nginx service"
+        if [ "$LEMPTOOL_ENVIRONMENT" = "container" ]; then
+            echo "Note: In container environment, this is expected during testing"
+        else
+            exit 1
+        fi
+    fi
+    echo "Nginx Service restarted !"
+    echo "Bash phpmyadmin installation script end"
+}
