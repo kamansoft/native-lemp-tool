@@ -1,4 +1,4 @@
-#! /bin/bash 
+#!/bin/bash 
 
 if [[ -z $1 && -z $2 ]] ;then
 	echo "This script check if the first pased argument string match with any of the rest passed string value arguments"
@@ -52,7 +52,3 @@ done
 detected_value=$1
 validate $@
 export VALUE_SELECTED_FROM_ARGS
-
-
-
-

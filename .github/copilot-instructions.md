@@ -9,4 +9,6 @@
 -Always use functions to encapsulate logic
 -Always validate inputs before processing
 -Always use version control for scripts
-
+-Always keep updated README.md file and docs files when adding new features or changing existing ones 
+-Allways check that a modification does not break existing functionalities
+-Always adhere to the DRY (Don't Repeat Yourself) principle

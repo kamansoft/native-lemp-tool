@@ -1,47 +1,210 @@
 #!/bin/bash
 
-# run:
-# ./manage-etc-hosts.sh add 10.20.1.2 test.com
-# ./manage-etc-hosts.sh remove 10.20.1.2 test.com
+# Enhanced hosts file manager for LEMP tool
+# Supports adding and removing domain entries with improved error handling
 
 # PATH TO YOUR HOSTS FILE
 ETC_HOSTS=/etc/hosts
 
-
-function remove() {
-    # IP to add/remove.
-    IP=$1
-    # Hostname to add/remove.
-    HOSTNAME=$2
-    HOSTS_LINE="$IP[[:space:]]$HOSTNAME"
-    if [ -n "$(grep -P $HOSTS_LINE $ETC_HOSTS)" ]
-    then
-        echo "$HOSTS_LINE Found in your $ETC_HOSTS, Removing now...";
-        sudo sed -i".bak" "/$HOSTS_LINE/d" $ETC_HOSTS
-    else
-        echo "$HOSTS_LINE was not found in your $ETC_HOSTS";
-    fi
+# Enhanced logging functions
+log_info() {
+    echo "> $1"
 }
 
-function add() {
-    IP=$1
-    HOSTNAME=$2
-    HOSTS_LINE="$IP[[:space:]]$HOSTNAME"
-    line_content=$( printf "%s\t%s\n" "$IP" "$HOSTNAME" )
-    if [ -n "$(grep -P $HOSTS_LINE $ETC_HOSTS)" ]
-        then
-            echo "$line_content already exists : $(grep $HOSTNAME $ETC_HOSTS)"
+log_error() {
+    echo "> Error: $1" >&2
+}
+
+log_success() {
+    echo "> Success: $1"
+}
+
+# Validate input parameters
+validate_inputs() {
+    local action="$1"
+    local ip="$2"
+    local hostname="$3"
+    
+    if [[ -z "$action" || -z "$ip" || -z "$hostname" ]]; then
+        log_error "Missing required parameters"
+        echo "Usage: $0 <add|remove> <ip> <hostname>"
+        return 1
+    fi
+    
+    # Validate IP format (basic check)
+    if ! [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        log_error "Invalid IP address format: $ip"
+        return 1
+    fi
+    
+    # Validate hostname format (basic check)
+    if ! [[ "$hostname" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        log_error "Invalid hostname format: $hostname"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Check if hosts file is writable
+check_hosts_file() {
+    if [[ ! -f "$ETC_HOSTS" ]]; then
+        log_error "Hosts file not found: $ETC_HOSTS"
+        return 1
+    fi
+    
+    if [[ ! -w "$ETC_HOSTS" ]] && [[ $EUID -ne 0 ]]; then
+        log_error "Hosts file is not writable. Try running with sudo."
+        return 1
+    fi
+    
+    return 0
+}
+
+# Remove hostname from hosts file
+remove() {
+    local ip="$1"
+    local hostname="$2"
+    
+    validate_inputs "remove" "$ip" "$hostname" || return 1
+    check_hosts_file || return 1
+    
+    # Create more precise regex pattern
+    local hosts_pattern="^[[:space:]]*${ip}[[:space:]]+${hostname}[[:space:]]*$"
+    
+    if grep -q -E "$hosts_pattern" "$ETC_HOSTS"; then
+        log_info "Removing '$hostname' -> '$ip' from hosts file"
+        if sed -i.bak -E "/$hosts_pattern/d" "$ETC_HOSTS"; then
+            log_success "Removed: $ip   $hostname"
+            return 0
         else
-            echo "Adding $line_content to your $ETC_HOSTS";
-            sudo -- sh -c -e "echo '$line_content' >> /etc/hosts";
-
-            if [ -n "$(grep -P $HOSTNAME $ETC_HOSTS)" ]
-                then
-                    echo "$line_content was added succesfully";
-                else
-                    echo "Failed to Add $line_content, Try again!";
-            fi
+            log_error "Failed to remove entry from hosts file"
+            return 1
+        fi
+    else
+        log_info "Entry '$hostname' -> '$ip' not found in hosts file"
+        return 0
     fi
 }
 
-$@
+# Add hostname to hosts file
+add() {
+    local ip="$1"
+    local hostname="$2"
+    
+    validate_inputs "add" "$ip" "$hostname" || return 1
+    check_hosts_file || return 1
+    
+    # Check if hostname already exists (any IP)
+    if grep -q "^[[:space:]]*[0-9.]*[[:space:]]*${hostname}[[:space:]]*$" "$ETC_HOSTS"; then
+        local existing_entry
+        existing_entry=$(grep "^[[:space:]]*[0-9.]*[[:space:]]*${hostname}[[:space:]]*$" "$ETC_HOSTS" | head -1)
+        log_info "Hostname '$hostname' already exists in hosts file:"
+        log_info "  $existing_entry"
+        
+        # Check if it's the same IP
+        if grep -q "^[[:space:]]*${ip}[[:space:]]*${hostname}[[:space:]]*$" "$ETC_HOSTS"; then
+            log_info "Entry already exists with correct IP"
+            return 0
+        else
+            log_info "Updating existing entry to use IP: $ip"
+            # Remove old entry and add new one
+            sed -i.bak -E "/^[[:space:]]*[0-9.]*[[:space:]]*${hostname}[[:space:]]*$/d" "$ETC_HOSTS"
+        fi
+    fi
+    
+    # Add new entry
+    local line_content="$ip   $hostname"
+    log_info "Adding '$hostname' -> '$ip' to hosts file"
+    
+    if echo "$line_content" >> "$ETC_HOSTS"; then
+        log_success "Added: $line_content"
+        return 0
+    else
+        log_error "Failed to add entry to hosts file"
+        return 1
+    fi
+}
+
+# List all custom entries (non-system)
+list() {
+    check_hosts_file || return 1
+    
+    log_info "Custom entries in hosts file:"
+    grep -v -E "^[[:space:]]*#|^[[:space:]]*$|^[[:space:]]*127\.0\.0\.1[[:space:]]*localhost" "$ETC_HOSTS" | \
+    grep -v -E "^[[:space:]]*::1[[:space:]]*localhost" | \
+    while read -r line; do
+        echo "  $line"
+    done
+}
+
+# Enhanced add function for LEMP integration
+add_domain() {
+    local domain="$1"
+    local ip="${2:-127.0.0.1}"
+    
+    if [[ -z "$domain" ]]; then
+        log_error "Domain name is required"
+        return 1
+    fi
+    
+    add "$ip" "$domain"
+}
+
+# Enhanced remove function for LEMP integration
+remove_domain() {
+    local domain="$1"
+    local ip="${2:-127.0.0.1}"
+    
+    if [[ -z "$domain" ]]; then
+        log_error "Domain name is required"
+        return 1
+    fi
+    
+    remove "$ip" "$domain"
+}
+
+# Main function dispatcher
+main() {
+    local action="$1"
+    
+    case "$action" in
+        "add")
+            add "$2" "$3"
+            ;;
+        "remove")
+            remove "$2" "$3"
+            ;;
+        "add_domain")
+            add_domain "$2" "$3"
+            ;;
+        "remove_domain")
+            remove_domain "$2" "$3"
+            ;;
+        "list")
+            list
+            ;;
+        *)
+            echo "Usage: $0 <add|remove|add_domain|remove_domain|list> [ip] [hostname]"
+            echo ""
+            echo "Commands:"
+            echo "  add <ip> <hostname>        Add hostname with specific IP"
+            echo "  remove <ip> <hostname>     Remove hostname with specific IP"
+            echo "  add_domain <domain> [ip]   Add domain (default IP: 127.0.0.1)"
+            echo "  remove_domain <domain> [ip] Remove domain (default IP: 127.0.0.1)"
+            echo "  list                       List all custom entries"
+            echo ""
+            echo "Examples:"
+            echo "  $0 add 127.0.0.1 myapp.local"
+            echo "  $0 add_domain myapp.local"
+            echo "  $0 remove_domain myapp.local"
+            echo "  $0 list"
+            return 1
+            ;;
+    esac
+}
+
+# Run main function if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

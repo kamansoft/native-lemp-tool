@@ -40,7 +40,7 @@ show_help() {
     echo ""
     echo -e "${YELLOW}Commands:${NC}"
     echo "  test [OS] [TYPE]    Run tests on specified OS (default: $DEFAULT_OS)"
-    echo "                      TYPE can be: unit, e2e, both (default: both)"
+    echo "                      TYPE can be: unit, e2e, integration, both (default: both)"
     echo "  test-all            Run tests on all supported OS versions"
     echo "  interactive [OS]    Start interactive session on specified OS"
     echo "  build [OS]          Build Docker image for specified OS"
@@ -172,6 +172,12 @@ run_test() {
                 bash testing/e2e-tests.sh
             "
             ;;
+        "integration")
+            test_commands="
+                echo '=== Running LEMP Integration Test ==='
+                bash testing/lemp-integration-test.sh
+            "
+            ;;
         "both")
             test_commands="
                 echo '=== Running Unit Tests ==='
@@ -182,7 +188,7 @@ run_test() {
             "
             ;;
         *)
-            log_error "Invalid test type: $test_type. Use 'unit', 'e2e', or 'both'"
+            log_error "Invalid test type: $test_type. Use 'unit', 'e2e', 'integration', or 'both'"
             return 1
             ;;
     esac
